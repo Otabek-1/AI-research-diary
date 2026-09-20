@@ -1,6 +1,13 @@
 [build]
   command = "npm run build"
 
+# GITHUB_OWNER / GITHUB_REPO / GITHUB_BRANCH are public repository coordinates, not
+# secrets. Their values are common words that appear incidentally in vendored
+# dependencies and build caches, so exclude just these keys from secrets scanning.
+# GITHUB_TOKEN is deliberately left in scope.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "GITHUB_OWNER,GITHUB_REPO,GITHUB_BRANCH"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
