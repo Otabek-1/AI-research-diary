@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "new-research-1789929181741",
+  "slug": "where-it-begins",
+  "title": "Where it begins",
+  "description": "There is a difference between using something and understanding it.",
+  "status": "published",
+  "createdAt": "2026-09-20",
+  "updatedAt": "2026-09-20",
+  "section": "section-1789929130718",
+  "tags": [
+    "start"
+  ],
+  "content": [
+    {
+      "type": "paragraph",
+      "text": "For a long time, I’ve been using AI as a tool — running models, writing code, working with libraries, and seeing what they can do.\n\nBut somewhere along the way, I started wondering:\n\nWhat is actually happening inside?\n\nHow does a machine turn numbers into meaning?\nHow does it learn from mistakes?\nHow does a collection of mathematical operations become something that can recognize patterns, understand language, and generate new things?"
+    },
+    {
+      "type": "quote",
+      "text": "I don't want to stay on the surface."
+    },
+    {
+      "type": "paragraph",
+      "text": "So this is my attempt to go all the way down — from mathematics and basic algorithms to neural networks, transformers, and eventually a model of my own.\n\nI don't know exactly where this path ends.\n\nThat's kind of the point."
+    },
+    {
+      "type": "quote",
+      "text": "But I know where it begins."
+    }
+  ],
+  "related": [],
+  "references": [],
+  "seo": {
+    "title": "Where it begins",
+    "description": "There is a difference between using something and understanding it."
+  }
+}
