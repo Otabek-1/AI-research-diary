@@ -85,6 +85,8 @@ export default function PrivateEditor() {
   const [showMetadata, setShowMetadata] = useState(false);
   const [showSeo, setShowSeo] = useState(false);
   const [activeBlock, setActiveBlock] = useState<number | null>(null);
+  const [leftWidth, setLeftWidth] = useState(255);
+  const [rightWidth, setRightWidth] = useState(250);
   const status = getTranslationStatus(selectedId);
   const headings = document.content.filter((block) => block.type === "heading");
 
@@ -120,6 +122,8 @@ export default function PrivateEditor() {
   }, [locale]);
   useEffect(() => { window.localStorage.setItem(`field-notes-tree-${locale}`, JSON.stringify(tree)); }, [locale, tree]);
   useEffect(() => { window.localStorage.setItem(`field-notes-deletes-${locale}`, JSON.stringify(deletedPaths)); }, [locale, deletedPaths]);
+  useEffect(() => { const saved = window.localStorage.getItem("field-notes-workspace-widths"); if (!saved) return; const timer = window.setTimeout(() => { try { const widths = JSON.parse(saved) as { left?: number; right?: number }; if (widths.left) setLeftWidth(widths.left); if (widths.right) setRightWidth(widths.right); } catch { /* Ignore invalid layout preferences. */ } }, 0); return () => window.clearTimeout(timer); }, []);
+  useEffect(() => { window.localStorage.setItem("field-notes-workspace-widths", JSON.stringify({ left: leftWidth, right: rightWidth })); }, [leftWidth, rightWidth]);
 
   function openDocument(id: string) {
     const next = documents.find((item) => item.id === id);
@@ -199,6 +203,14 @@ export default function PrivateEditor() {
       ],
     }));
     setMessage("New section added locally");
+  }
+  function resizePanel(side: "left" | "right", event: React.PointerEvent<HTMLDivElement>) {
+    const startX = event.clientX;
+    const startWidth = side === "left" ? leftWidth : rightWidth;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent) => { const delta = moveEvent.clientX - startX; const next = Math.max(190, Math.min(420, startWidth + (side === "left" ? delta : -delta))); if (side === "left") setLeftWidth(next); else setRightWidth(next); };
+    const stop = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", stop, { once: true });
   }
   function addSubsection(parentId: string) {
     const title = window.prompt("New subsection name", "New section")?.trim();
@@ -376,7 +388,7 @@ export default function PrivateEditor() {
           </button>
         </div>
       </header>
-      <div className="workspace-grid">
+      <div className="workspace-grid" style={{ gridTemplateColumns: `${leftWidth}px 6px minmax(480px, 1fr) 6px ${rightWidth}px` }}>
         <aside className="workspace-sidebar left-sidebar">
           <div className="workspace-sidebar-head">
             <div>
@@ -419,7 +431,7 @@ export default function PrivateEditor() {
               <Plus size={14} /> New section
             </button>
           </div>
-        </aside>
+        </aside><div className="panel-resize-handle left-resize" onPointerDown={(event) => resizePanel("left", event)} role="separator" aria-label="Resize library panel" />
         <section className="visual-editor">
           <div className="editor-toolbar">
             <div>
@@ -529,7 +541,7 @@ export default function PrivateEditor() {
               )}
             </div>
           </div>
-        </section>
+        </section><div className="panel-resize-handle right-resize" onPointerDown={(event) => resizePanel("right", event)} role="separator" aria-label="Resize outline panel" />
         <aside className="workspace-sidebar right-sidebar">
           <div className="outline-head">
             <span className="eyebrow">On this page</span>
