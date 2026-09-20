@@ -8,6 +8,13 @@
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "GITHUB_OWNER,GITHUB_REPO,GITHUB_BRANCH"
 
+  # Turbopack records the environment variables a compilation depended on inside its
+  # incremental cache, so server-only values such as EDITOR_PASSWORD_HASH appear in
+  # .next/cache. These caches are build-time only and are never uploaded with the
+  # deploy, so exclude just the cache directories. Every deployed artifact is still
+  # scanned, and no secret key is exempted by value.
+  SECRETS_SCAN_OMIT_PATHS = ".next/cache,.netlify/.next/cache"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
