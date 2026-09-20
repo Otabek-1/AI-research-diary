@@ -123,10 +123,13 @@ export default function PrivateEditor() {
   useEffect(() => { window.localStorage.setItem("field-notes-workspace-widths", JSON.stringify({ left: leftWidth, right: rightWidth })); }, [leftWidth, rightWidth]);
 
   function openDocument(id: string) {
-    const next = documents.find((item) => item.id === id);
+    const next = documents.find((item) => item.id === id) ?? readLocalDraft(locale, id);
     if (next) {
       setSelectedId(id);
       setDocument(next);
+      setDocuments((current) =>
+        current.some((item) => item.id === next.id) ? current : [...current, next],
+      );
     }
   }
   function switchLocale(nextLocale: Locale) {
@@ -978,6 +981,14 @@ function findTreePath(nodes: TreeNode[], nodeId: string, parents: string[] = [])
 }
 function insertTreeChild(nodes: TreeNode[], parentId: string, child: TreeNode): TreeNode[] { return nodes.map((node) => node.id === parentId ? { ...node, children: [...(node.children ?? []), child] } : node.children ? { ...node, children: insertTreeChild(node.children, parentId, child) } : node); }
 function addDocumentToTree(nodes: TreeNode[], sectionId: string, documentId: string): TreeNode[] { return nodes.map((node) => node.id === sectionId ? { ...node, documentIds: [...(node.documentIds ?? []), documentId] } : node.children ? { ...node, children: addDocumentToTree(node.children, sectionId, documentId) } : node); }
+function readLocalDraft(locale: Locale, id: string): Document | undefined {
+  try {
+    const saved = window.localStorage.getItem(`field-notes-draft-${locale}-${id}`);
+    return saved ? JSON.parse(saved) as Document : undefined;
+  } catch {
+    return undefined;
+  }
+}
 function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
