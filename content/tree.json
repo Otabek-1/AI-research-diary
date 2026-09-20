@@ -3,18 +3,12 @@
   "updatedAt": "2026-09-20",
   "roots": [
     {
-      "id": "section-1789927259005",
+      "id": "section-1789929130718",
       "title": "Where it begins",
       "children": [],
       "documentIds": [
-        "new-research-1789927288797"
+        "new-research-1789929181741"
       ]
-    },
-    {
-      "id": "ai-research",
-      "title": "AI Research",
-      "description": "Foundations, methods, and open questions.",
-      "children": []
     }
   ]
 }
