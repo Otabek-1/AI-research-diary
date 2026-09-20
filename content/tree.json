@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-20",
+  "roots": [
+    {
+      "id": "ai-research",
+      "title": "AI Research",
+      "description": "Foundations, methods, and open questions.",
+      "children": [
+        {
+          "id": "foundations",
+          "title": "Foundations",
+          "children": [
+            { "id": "machine-learning", "title": "Machine Learning", "documentIds": ["machine-learning"] },
+            { "id": "neural-networks", "title": "Neural Networks", "documentIds": ["neural-networks"] }
+          ]
+        },
+        {
+          "id": "deep-learning",
+          "title": "Deep Learning",
+          "children": [
+            { "id": "gradient-descent", "title": "Gradient Descent", "documentIds": ["gradient-descent"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "field-notes",
+      "title": "Field Notes",
+      "description": "Observations from the edge of the map.",
+      "children": []
+    }
+  ]
+}
