@@ -2,6 +2,7 @@
 
 import JSZip from "jszip";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ChevronDown,
   ChevronRight,
@@ -896,7 +897,7 @@ function BlockEditor({
             />
           </label>
           {block.src && (
-            <img src={block.src} alt={block.alt} className="uploaded-image" />
+            <Image src={block.src} alt={block.alt} width={760} height={260} unoptimized className="uploaded-image" />
           )}
           <input
             value={block.alt}
