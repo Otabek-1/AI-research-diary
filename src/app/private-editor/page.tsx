@@ -72,12 +72,8 @@ export default function PrivateEditor() {
   const [documents, setDocuments] = useState<Document[]>(() =>
     getDocuments("en"),
   );
-  const [selectedId, setSelectedId] = useState("neural-networks");
-  const [document, setDocument] = useState<Document>(
-    () =>
-      getDocuments("en").find((item) => item.id === "neural-networks") ??
-      starter,
-  );
+  const [selectedId, setSelectedId] = useState(starter.id);
+  const [document, setDocument] = useState<Document>(() => starter);
   const [tree, setTree] = useState(() => getTree("en"));
   const [deletedPaths, setDeletedPaths] = useState<string[]>([]);
   const [message, setMessage] = useState("Saved locally");

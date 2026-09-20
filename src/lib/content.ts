@@ -2,15 +2,6 @@ import enUi from "@/locales/en.json";
 import uzUi from "@/locales/uz.json";
 import ruUi from "@/locales/ru.json";
 import sharedTree from "../../content/tree.json";
-import enMachineLearning from "../../content/locales/en/machine-learning.json";
-import enNeuralNetworks from "../../content/locales/en/neural-networks.json";
-import enGradientDescent from "../../content/locales/en/gradient-descent.json";
-import uzMachineLearning from "../../content/locales/uz/machine-learning.json";
-import uzNeuralNetworks from "../../content/locales/uz/neural-networks.json";
-import uzGradientDescent from "../../content/locales/uz/gradient-descent.json";
-import ruMachineLearning from "../../content/locales/ru/machine-learning.json";
-import ruNeuralNetworks from "../../content/locales/ru/neural-networks.json";
-import ruGradientDescent from "../../content/locales/ru/gradient-descent.json";
 
 export const locales = ["en", "uz", "ru"] as const;
 export type Locale = (typeof locales)[number];
@@ -28,10 +19,10 @@ export type TreeNode = { id: string; title: string; children?: TreeNode[]; docum
 export type Tree = { schemaVersion: number; updatedAt: string; roots: TreeNode[] };
 
 const docs: Record<Locale, Document[]> = {
-  en: [enMachineLearning, enNeuralNetworks, enGradientDescent],
-  uz: [uzMachineLearning, uzNeuralNetworks, uzGradientDescent],
-  ru: [ruMachineLearning, ruNeuralNetworks, ruGradientDescent],
-} as unknown as Record<Locale, Document[]>;
+  en: [],
+  uz: [],
+  ru: [],
+};
 const sharedStructure = sharedTree as unknown as Tree;
 const ui = { en: enUi, uz: uzUi, ru: ruUi };
 

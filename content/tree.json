@@ -10,17 +10,12 @@
         {
           "id": "foundations",
           "title": "Foundations",
-          "children": [
-            { "id": "machine-learning", "title": "Machine Learning", "documentIds": ["machine-learning"] },
-            { "id": "neural-networks", "title": "Neural Networks", "documentIds": ["neural-networks"] }
-          ]
+          "children": []
         },
         {
           "id": "deep-learning",
           "title": "Deep Learning",
-          "children": [
-            { "id": "gradient-descent", "title": "Gradient Descent", "documentIds": ["gradient-descent"] }
-          ]
+          "children": []
         }
       ]
     },
