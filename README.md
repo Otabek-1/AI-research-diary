@@ -31,6 +31,6 @@ Turbopack keeps a record of the environment variables each compilation read insi
 
 ## Automatic publishing
 
-The private editor includes `Publish to GitHub`. Configure `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_BRANCH` in Netlify environment variables. The server commits the generated locale document and uploaded media through the GitHub Contents API; Netlify then rebuilds from that commit. The GitHub token is never exposed to browser code. ZIP export remains available as a manual fallback.
+The private editor includes `Publish to GitHub`. Configure `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_BRANCH` in Netlify environment variables. The server creates one atomic Git commit containing generated locale documents, tree changes, uploaded media, and deletions through the Git Data API; Netlify then rebuilds from that commit. The GitHub token is never exposed to browser code. ZIP export remains available as a manual fallback.
 
 This project has no database, analytics store, reaction store, or server-side content API. Add any future external analytics or reaction provider behind an explicit adapter rather than fabricating counts.

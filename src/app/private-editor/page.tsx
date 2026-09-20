@@ -109,6 +109,17 @@ export default function PrivateEditor() {
       JSON.stringify(document),
     );
   }, [document, locale, selectedId]);
+  useEffect(() => {
+    const savedTree = window.localStorage.getItem(`field-notes-tree-${locale}`);
+    const savedDeletes = window.localStorage.getItem(`field-notes-deletes-${locale}`);
+    const timer = window.setTimeout(() => {
+      if (savedTree) { try { setTree(JSON.parse(savedTree)); } catch { /* Ignore an invalid local tree draft. */ } }
+      if (savedDeletes) { try { setDeletedPaths(JSON.parse(savedDeletes)); } catch { /* Ignore an invalid local delete draft. */ } }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [locale]);
+  useEffect(() => { window.localStorage.setItem(`field-notes-tree-${locale}`, JSON.stringify(tree)); }, [locale, tree]);
+  useEffect(() => { window.localStorage.setItem(`field-notes-deletes-${locale}`, JSON.stringify(deletedPaths)); }, [locale, deletedPaths]);
 
   function openDocument(id: string) {
     const next = documents.find((item) => item.id === id);
@@ -197,6 +208,9 @@ export default function PrivateEditor() {
   }
   function deleteTreeNode(nodeId: string, title: string) {
     if (!window.confirm(`Delete section “${title}” and its nested sections?`)) return;
+    const deletedIds = collectDocumentIds(tree.roots, nodeId);
+    const deletedSlugs = documents.filter((item) => deletedIds.includes(item.id)).map((item) => `content/locales/${locale}/${item.slug}.json`);
+    setDeletedPaths((current) => [...new Set([...current, ...deletedSlugs])]);
     setTree((current) => ({ ...current, roots: removeTreeNode(current.roots, nodeId) }));
     setMessage("Section deleted locally");
   }
@@ -915,6 +929,9 @@ function removeTreeNode(nodes: TreeNode[], nodeId: string): TreeNode[] {
 }
 function removeDocumentFromTree(nodes: TreeNode[], documentId: string): TreeNode[] {
   return nodes.map((node) => ({ ...node, documentIds: node.documentIds?.filter((id) => id !== documentId), children: node.children ? removeDocumentFromTree(node.children, documentId) : node.children }));
+}
+function collectDocumentIds(nodes: TreeNode[], targetId: string, inside = false): string[] {
+  return nodes.flatMap((node) => { const isInside = inside || node.id === targetId; return [...(isInside ? node.documentIds ?? [] : []), ...(node.children ? collectDocumentIds(node.children, targetId, isInside) : [])]; });
 }
 function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
