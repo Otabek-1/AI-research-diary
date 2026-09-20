@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
 type PublishFile = { path: string; content: string; encoding?: "utf8" | "base64" };
-type GitRef = { object?: { sha?: string } };
-type GitCommit = { tree?: { sha?: string } };
+type GitHubFile = { sha?: string };
 
 export async function POST(request: Request) {
   const token = process.env.GITHUB_TOKEN;
@@ -13,29 +12,32 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { files?: PublishFile[]; deletes?: string[]; message?: string };
     const files = body.files ?? [];
-    const deletes = body.deletes ?? [];
+    const deletes = [...new Set(body.deletes ?? [])];
     if (!files.length && !deletes.length) return NextResponse.json({ error: "No files to publish." }, { status: 400 });
     if (files.some((file) => !safePath(file.path) || !file.content) || deletes.some((path) => !safePath(path))) return NextResponse.json({ error: "Invalid publish file." }, { status: 400 });
-    const api = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
     const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28" };
-    const ref = await github<GitRef>(`${api}/git/ref/heads/${encodeURIComponent(branch)}`, { headers });
-    const headSha = ref.object?.sha;
-    if (!headSha) return NextResponse.json({ error: `Branch ${branch} was not found.` }, { status: 404 });
-    const head = await github<GitCommit>(`${api}/git/commits/${headSha}`, { headers });
-    const baseTree = head.tree?.sha;
-    if (!baseTree) return NextResponse.json({ error: "GitHub did not return the current tree." }, { status: 502 });
-    const entries: { path: string; mode: "100644"; type: "blob"; sha: string | null }[] = [];
-    for (const file of files) {
-      const blob = await github<{ sha: string }>(`${api}/git/blobs`, { method: "POST", headers, body: JSON.stringify({ content: file.content, encoding: file.encoding === "base64" ? "base64" : "utf-8" }) });
-      entries.push({ path: file.path, mode: "100644", type: "blob", sha: blob.sha });
+    const base = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents`;
+    const commitMessage = body.message || "Update research archive";
+    for (const path of deletes) {
+      const endpoint = `${base}/${githubPath(path)}`;
+      const existing = await fetch(`${endpoint}?ref=${encodeURIComponent(branch)}`, { headers });
+      if (existing.status === 404) continue;
+      if (!existing.ok) return NextResponse.json({ error: `Could not inspect ${path} before deletion.` }, { status: existing.status });
+      const current = await existing.json() as GitHubFile;
+      if (!current.sha) return NextResponse.json({ error: `GitHub did not return a SHA for ${path}.` }, { status: 502 });
+      const deleted = await fetch(endpoint, { method: "DELETE", headers, body: JSON.stringify({ message: commitMessage, sha: current.sha, branch }) });
+      if (!deleted.ok) return NextResponse.json({ error: `GitHub rejected deletion of ${path}.`, detail: await deleted.text() }, { status: deleted.status });
     }
-    for (const path of deletes) entries.push({ path, mode: "100644", type: "blob", sha: null });
-    const tree = await github<{ sha: string }>(`${api}/git/trees`, { method: "POST", headers, body: JSON.stringify({ base_tree: baseTree, tree: entries }) });
-    const commit = await github<{ sha: string }>(`${api}/git/commits`, { method: "POST", headers, body: JSON.stringify({ message: body.message || "Update research archive", tree: tree.sha, parents: [headSha] }) });
-    await github(`${api}/git/refs/heads/${encodeURIComponent(branch)}`, { method: "PATCH", headers, body: JSON.stringify({ sha: commit.sha, force: false }) });
-    return NextResponse.json({ ok: true, commit: commit.sha, files: files.map((file) => file.path), deletes, branch });
+    for (const file of files) {
+      const endpoint = `${base}/${githubPath(file.path)}`;
+      const existing = await fetch(`${endpoint}?ref=${encodeURIComponent(branch)}`, { headers });
+      const current = existing.ok ? await existing.json() as GitHubFile : undefined;
+      const saved = await fetch(endpoint, { method: "PUT", headers, body: JSON.stringify({ message: commitMessage, branch, content: file.encoding === "base64" ? file.content : Buffer.from(file.content, "utf8").toString("base64"), ...(current?.sha ? { sha: current.sha } : {}) }) });
+      if (!saved.ok) return NextResponse.json({ error: `GitHub rejected ${file.path}.`, detail: await saved.text() }, { status: saved.status });
+    }
+    return NextResponse.json({ ok: true, files: files.map((file) => file.path), deletes, branch });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Publish failed." }, { status: 500 }); }
 }
 
 function safePath(path: string) { return Boolean(path) && !path.startsWith("/") && !path.includes("..") && !path.includes("\\"); }
-async function github<T = unknown>(url: string, init: RequestInit): Promise<T> { const response = await fetch(url, init); if (!response.ok) throw new Error(`GitHub request failed (${response.status}): ${await response.text()}`); return await response.json() as T; }
+function githubPath(path: string) { return path.split("/").map(encodeURIComponent).join("/"); }

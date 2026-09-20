@@ -1,9 +1,7 @@
 import enUi from "@/locales/en.json";
 import uzUi from "@/locales/uz.json";
 import ruUi from "@/locales/ru.json";
-import enTree from "../../content/locales/en/tree.json";
-import uzTree from "../../content/locales/uz/tree.json";
-import ruTree from "../../content/locales/ru/tree.json";
+import sharedTree from "../../content/tree.json";
 import enMachineLearning from "../../content/locales/en/machine-learning.json";
 import enNeuralNetworks from "../../content/locales/en/neural-networks.json";
 import enGradientDescent from "../../content/locales/en/gradient-descent.json";
@@ -34,21 +32,22 @@ const docs: Record<Locale, Document[]> = {
   uz: [uzMachineLearning, uzNeuralNetworks, uzGradientDescent],
   ru: [ruMachineLearning, ruNeuralNetworks, ruGradientDescent],
 } as unknown as Record<Locale, Document[]>;
-const trees: Record<Locale, Tree> = { en: enTree, uz: uzTree, ru: ruTree } as unknown as Record<Locale, Tree>;
+const sharedStructure = sharedTree as unknown as Tree;
 const ui = { en: enUi, uz: uzUi, ru: ruUi };
 
 export function isLocale(value: string): value is Locale { return locales.includes(value as Locale); }
 export function getLocale(value?: string): Locale { return value && isLocale(value) ? value : defaultLocale; }
 export function getUi(locale: Locale) { return ui[locale]; }
 export function getDocuments(locale: Locale) {
-  const visibleIds = new Set(flattenTreeDocumentIds(trees[locale] ?? trees[defaultLocale]));
+  const visibleIds = new Set(flattenTreeDocumentIds(sharedStructure));
   return docs[locale].filter((document) => document.status === "published" && visibleIds.has(document.id));
 }
 export function getDocument(slug: string, locale: Locale) { return getDocuments(locale).find((document) => document.slug === slug) ?? (locale !== defaultLocale ? getDocuments(defaultLocale).find((document) => document.slug === slug) : undefined); }
-export function getTree(locale: Locale) { return trees[locale] ?? trees[defaultLocale]; }
+export function getTree(locale: Locale) { return localizeTree(sharedStructure, locale); }
 export function getTranslationStatus(id: string) { return locales.reduce((status, locale) => ({ ...status, [locale]: docs[locale].some((document) => document.id === id) }), {} as Record<Locale, boolean>); }
 export function blockText(block: ContentBlock) { return "text" in block ? block.text : `${block.alt} ${block.caption}`; }
 export function readingTime(document: Document) { const words = document.content.map(blockText).join(" ").split(/\s+/).filter(Boolean).length; return Math.max(1, Math.ceil(words / 190)); }
 const sectionNames: Record<Locale, Record<string, string>> = { en: { "ai-research": "AI Research", foundations: "Foundations", "deep-learning": "Deep Learning" }, uz: { "ai-research": "AI tadqiqotlari", foundations: "Asoslar", "deep-learning": "Chuqur o'rganish" }, ru: { "ai-research": "Исследования ИИ", foundations: "Основы", "deep-learning": "Глубокое обучение" } };
 export function sectionLabel(section: string, locale: Locale = defaultLocale) { return section.split("/").map((part) => sectionNames[locale][part] ?? part.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())).join(" / "); }
 function flattenTreeDocumentIds(tree: Tree): string[] { return tree.roots.flatMap((node) => [...(node.documentIds ?? []), ...(node.children ? flattenTreeDocumentIds({ ...tree, roots: node.children }) : [])]); }
+function localizeTree(shared: Tree, locale: Locale): Tree { const localize = (nodes: TreeNode[]): TreeNode[] => nodes.map((node) => { const translatedDocument = docs[locale].find((document) => document.id === node.id); const translatedTitle = sectionNames[locale][node.id] ?? translatedDocument?.title ?? node.title; return { ...node, title: translatedTitle, children: node.children ? localize(node.children) : node.children }; }); return { ...shared, roots: localize(shared.roots) }; }

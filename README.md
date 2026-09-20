@@ -19,6 +19,7 @@ Connect the repository to Netlify and use the default Node build environment. `n
 
 - Published documents live under `content/` as deterministic JSON.
 - `content/tree.json` is the hierarchy source of truth.
+- The tree is language-independent: section IDs, document IDs, nesting, and ordering live only in `content/tree.json`; locale files provide translated document text and labels, not separate structures.
 - The public site statically renders published JSON only.
 - `/private-editor` imports an existing document, validates required identity fields, and exports JSON or a ZIP preserving the `content/<section>/<slug>.json` path.
 - The editor intentionally downloads files. It cannot and does not pretend to modify the Git repository; review exports, replace source files, then commit and push.
@@ -31,6 +32,6 @@ Turbopack keeps a record of the environment variables each compilation read insi
 
 ## Automatic publishing
 
-The private editor includes `Publish to GitHub`. Configure `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_BRANCH` in Netlify environment variables. The server creates one atomic Git commit containing generated locale documents, tree changes, uploaded media, and deletions through the Git Data API; Netlify then rebuilds from that commit. The GitHub token is never exposed to browser code. ZIP export remains available as a manual fallback.
+The private editor includes `Publish to GitHub`. Configure `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_BRANCH` in Netlify environment variables. The server updates or deletes generated files through the GitHub Contents API, including the shared `content/tree.json`; Netlify then rebuilds from those commits. The GitHub token is never exposed to browser code. ZIP export remains available as a manual fallback.
 
 This project has no database, analytics store, reaction store, or server-side content API. Add any future external analytics or reaction provider behind an explicit adapter rather than fabricating counts.

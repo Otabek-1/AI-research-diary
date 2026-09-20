@@ -113,7 +113,7 @@ export default function PrivateEditor() {
     );
   }, [document, locale, selectedId]);
   useEffect(() => {
-    const savedTree = window.localStorage.getItem(`field-notes-tree-${locale}`);
+    const savedTree = window.localStorage.getItem("field-notes-tree-shared");
     const savedDeletes = window.localStorage.getItem(`field-notes-deletes-${locale}`);
     const timer = window.setTimeout(() => {
       if (savedTree) { try { setTree(JSON.parse(savedTree)); } catch { /* Ignore an invalid local tree draft. */ } }
@@ -121,7 +121,7 @@ export default function PrivateEditor() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [locale]);
-  useEffect(() => { window.localStorage.setItem(`field-notes-tree-${locale}`, JSON.stringify(tree)); }, [locale, tree]);
+  useEffect(() => { window.localStorage.setItem("field-notes-tree-shared", JSON.stringify(tree)); }, [tree]);
   useEffect(() => { window.localStorage.setItem(`field-notes-deletes-${locale}`, JSON.stringify(deletedPaths)); }, [locale, deletedPaths]);
   useEffect(() => { const saved = window.localStorage.getItem("field-notes-workspace-widths"); if (!saved) return; const timer = window.setTimeout(() => { try { const widths = JSON.parse(saved) as { left?: number; right?: number }; if (widths.left) setLeftWidth(widths.left); if (widths.right) setRightWidth(widths.right); } catch { /* Ignore invalid layout preferences. */ } }, 0); return () => window.clearTimeout(timer); }, []);
   useEffect(() => { window.localStorage.setItem("field-notes-workspace-widths", JSON.stringify({ left: leftWidth, right: rightWidth })); }, [leftWidth, rightWidth]);
@@ -240,7 +240,7 @@ export default function PrivateEditor() {
   function deleteTreeNode(nodeId: string, title: string) {
     if (!window.confirm(`Delete section “${title}” and its nested sections?`)) return;
     const deletedIds = collectDocumentIds(tree.roots, nodeId);
-    const deletedSlugs = documents.filter((item) => deletedIds.includes(item.id)).map((item) => `content/locales/${locale}/${item.slug}.json`);
+    const deletedSlugs = documents.filter((item) => deletedIds.includes(item.id)).flatMap((item) => locales.map((language) => `content/locales/${language}/${item.slug}.json`));
     setDeletedPaths((current) => [...new Set([...current, ...deletedSlugs])]);
     setTree((current) => ({ ...current, roots: removeTreeNode(current.roots, nodeId) }));
     setMessage("Section deleted locally");
@@ -250,7 +250,7 @@ export default function PrivateEditor() {
     if (!target || !window.confirm(`Remove “${target.title}” from this editor tree?`)) return;
     setDocuments((current) => current.filter((item) => item.id !== documentId));
     setTree((current) => ({ ...current, roots: removeDocumentFromTree(current.roots, documentId) }));
-    setDeletedPaths((current) => [...new Set([...current, `content/locales/${locale}/${target.slug}.json`])]);
+    setDeletedPaths((current) => [...new Set([...current, ...locales.map((language) => `content/locales/${language}/${target.slug}.json`)])]);
     if (selectedId === documentId) { setSelectedId("new-research-note"); setDocument(starter); }
     setMessage("Document removed locally");
   }
@@ -323,7 +323,7 @@ export default function PrivateEditor() {
     const errors = document.id !== "new-research-note" ? validate() : [];
     if (errors.length && !deletedPaths.length) { setMessage(errors.join(" | ")); return; }
     setMessage("Publishing to GitHub...");
-    const files: { path: string; content: string; encoding: "utf8" | "base64" }[] = [{ path: `content/locales/${locale}/tree.json`, content: JSON.stringify(tree, null, 2) + "\n", encoding: "utf8" }];
+    const files: { path: string; content: string; encoding: "utf8" | "base64" }[] = [{ path: "content/tree.json", content: JSON.stringify(tree, null, 2) + "\n", encoding: "utf8" }];
     if (document.id !== "new-research-note") { const { serialized, media } = serializeDocument(document); files.push({ path: `content/locales/${locale}/${document.slug}.json`, content: JSON.stringify(serialized, null, 2) + "\n", encoding: "utf8" }, ...media.map((asset) => ({ path: asset.path, content: asset.base64, encoding: "base64" as const }))); }
     const response = await fetch("/api/admin/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files, deletes: deletedPaths, message: `Update research structure (${locale})` }) });
     const result = await response.json() as { ok?: boolean; error?: string };
