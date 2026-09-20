@@ -27,4 +27,8 @@ Connect the repository to Netlify and use the default Node build environment. `n
 
 Set the server-only `EDITOR_PASSWORD` environment variable using the shape in `.env.example`. The private route is protected by Basic Auth middleware when the variable is configured. Without it, local development leaves the route open so the export workflow can be tested.
 
+## Automatic publishing
+
+The private editor includes `Publish to GitHub`. Configure `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_BRANCH` in Netlify environment variables. The server commits the generated locale document and uploaded media through the GitHub Contents API; Netlify then rebuilds from that commit. The GitHub token is never exposed to browser code. ZIP export remains available as a manual fallback.
+
 This project has no database, analytics store, reaction store, or server-side content API. Add any future external analytics or reaction provider behind an explicit adapter rather than fabricating counts.

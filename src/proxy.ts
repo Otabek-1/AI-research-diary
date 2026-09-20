@@ -12,4 +12,4 @@ export function proxy(request: NextRequest) {
   return new NextResponse("Authentication required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Field / Notes editor"' } });
 }
 
-export const config = { matcher: "/private-editor/:path*" };
+export const config = { matcher: ["/private-editor/:path*", "/api/admin/:path*"] };
