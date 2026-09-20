@@ -25,7 +25,7 @@ Connect the repository to Netlify and use the default Node build environment. `n
 
 ## Editor protection
 
-Set the server-only `EDITOR_PASSWORD` environment variable using the shape in `.env.example`. The private route is protected by Basic Auth middleware when the variable is configured. Without it, local development leaves the route open so the export workflow can be tested.
+Set the server-only `EDITOR_PASSWORD_HASH` environment variable using a bcrypt hash. The private route and publish API use browser Basic Auth, fail closed when the hash is missing, send no-store/security headers, and throttle repeated failed attempts. The plaintext password is never stored in the repository, browser bundle, or Netlify logs.
 
 ## Automatic publishing
 
