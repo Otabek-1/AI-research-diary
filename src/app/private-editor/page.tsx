@@ -78,6 +78,7 @@ export default function PrivateEditor() {
       starter,
   );
   const [tree, setTree] = useState(() => getTree("en"));
+  const [deletedPaths, setDeletedPaths] = useState<string[]>([]);
   const [message, setMessage] = useState("Saved locally");
   const [treeFilter, setTreeFilter] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
@@ -204,6 +205,7 @@ export default function PrivateEditor() {
     if (!target || !window.confirm(`Remove “${target.title}” from this editor tree?`)) return;
     setDocuments((current) => current.filter((item) => item.id !== documentId));
     setTree((current) => ({ ...current, roots: removeDocumentFromTree(current.roots, documentId) }));
+    setDeletedPaths((current) => [...new Set([...current, `content/locales/${locale}/${target.slug}.json`])]);
     if (selectedId === documentId) { setSelectedId("new-research-note"); setDocument(starter); }
     setMessage("Document removed locally");
   }
@@ -273,14 +275,14 @@ export default function PrivateEditor() {
     );
   }
   async function publishToGitHub() {
-    const errors = validate();
-    if (errors.length) { setMessage(errors.join(" | ")); return; }
+    const errors = document.id !== "new-research-note" ? validate() : [];
+    if (errors.length && !deletedPaths.length) { setMessage(errors.join(" | ")); return; }
     setMessage("Publishing to GitHub...");
-    const { serialized, media } = serializeDocument(document);
-    const files = [{ path: `content/locales/${locale}/${document.slug}.json`, content: JSON.stringify(serialized, null, 2) + "\n", encoding: "utf8" as const }, ...media.map((asset) => ({ path: asset.path, content: asset.base64, encoding: "base64" as const }))];
-    const response = await fetch("/api/admin/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files, message: `Update ${document.title} (${locale})` }) });
+    const files: { path: string; content: string; encoding: "utf8" | "base64" }[] = [{ path: `content/locales/${locale}/tree.json`, content: JSON.stringify(tree, null, 2) + "\n", encoding: "utf8" }];
+    if (document.id !== "new-research-note") { const { serialized, media } = serializeDocument(document); files.push({ path: `content/locales/${locale}/${document.slug}.json`, content: JSON.stringify(serialized, null, 2) + "\n", encoding: "utf8" }, ...media.map((asset) => ({ path: asset.path, content: asset.base64, encoding: "base64" as const }))); }
+    const response = await fetch("/api/admin/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files, deletes: deletedPaths, message: `Update research structure (${locale})` }) });
     const result = await response.json() as { ok?: boolean; error?: string };
-    setMessage(response.ok && result.ok ? "Published to GitHub. Netlify will deploy automatically." : result.error || "GitHub publish failed.");
+    if (response.ok && result.ok) { setDeletedPaths([]); setMessage("Published to GitHub. Deleted files and tree changes are now in the deploy queue."); } else setMessage(result.error || "GitHub publish failed.");
   }
   function importFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -713,16 +715,8 @@ function TreeView({
               onReorder(event.dataTransfer.getData("text/plain"), node.id);
             }}
           >
-            <button
-              className="tree-node-title"
-              onClick={() =>
-                node.children?.length &&
-                setCollapsed((current) => ({
-                  ...current,
-                  [node.id]: !current[node.id],
-                }))
-              }
-            >
+            <div className="tree-node-title">
+              <button className="tree-toggle" aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${node.title}`} onClick={() => node.children?.length && setCollapsed((current) => ({ ...current, [node.id]: !current[node.id] }))}>
               {node.children?.length ? (
                 isCollapsed ? (
                   <ChevronRight size={13} />
@@ -732,9 +726,10 @@ function TreeView({
               ) : (
                 <span className="tree-spacer" />
               )}
+              </button>
               <span>{node.title}</span>
               <span className="tree-node-actions"><button onClick={(event) => { event.stopPropagation(); onRename(node.id, node.title); }} aria-label={`Rename ${node.title}`}>Edit</button><button onClick={(event) => { event.stopPropagation(); onDelete(node.id, node.title); }} aria-label={`Delete ${node.title}`}><Trash2 size={12} /></button></span>
-            </button>
+            </div>
             {!isCollapsed &&
               node.documentIds?.map((id) => (
                 <button
