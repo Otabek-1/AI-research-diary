@@ -1,20 +1,5 @@
 {
   "schemaVersion": 1,
   "updatedAt": "2026-09-20",
-  "roots": [
-    {
-      "id": "section-1789927259005",
-      "title": "Where it begins",
-      "children": [],
-      "documentIds": [
-        "new-research-1789927288797"
-      ]
-    },
-    {
-      "id": "ai-research",
-      "title": "AI Research",
-      "description": "Foundations, methods, and open questions.",
-      "children": []
-    }
-  ]
+  "roots": []
 }
