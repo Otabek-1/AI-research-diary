@@ -35,9 +35,17 @@ export function getLocale(value?: string): Locale { return value && isLocale(val
 export function getUi(locale: Locale) { return ui[locale]; }
 export function getDocuments(locale: Locale) {
   const visibleIds = new Set(flattenTreeDocumentIds(sharedStructure));
+
   return flattenTreeDocumentIds(sharedStructure)
     .map((id) => getLocalizedDocumentById(id, locale))
-    .filter((document): document is Document => Boolean(document) && visibleStatuses.has(document.status) && visibleIds.has(document.id));
+    .filter((document): document is Document => {
+      if (!document) return false;
+
+      return (
+        visibleStatuses.has(document.status) &&
+        visibleIds.has(document.id)
+      );
+    });
 }
 export function getDocument(slug: string, locale: Locale) { return getDocuments(locale).find((document) => document.slug === slug || document.id === slug) ?? (locale !== defaultLocale ? getDocuments(defaultLocale).find((document) => document.slug === slug || document.id === slug) : undefined); }
 export function getTree(locale: Locale) { return localizeTree(sharedStructure, locale); }
