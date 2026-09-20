@@ -10,6 +10,7 @@ import {
   getUi,
   Locale,
   sectionLabel,
+  TreeNode,
 } from "@/lib/content";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
@@ -177,20 +178,12 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
                 <span className="tree-mark" />
                 {root.title}
               </div>
+              <TreeDocuments node={root} documents={documents} locale={locale} />
               {root.children?.map((child) => (
                 <div className="tree-child" key={child.id}>
                   <span className="branch" />
                   {child.title}
-                  {child.children
-                    ?.flatMap((leaf) => leaf.documentIds ?? [])
-                    .map((id) => {
-                      const document = documents.find((item) => item.id === id);
-                      return document ? (
-                        <Link href={`/${locale}/research/${document.slug}`} key={id} className="tree-document">
-                          {document.title} <ArrowUpRight size={13} />
-                        </Link>
-                      ) : null;
-                    })}
+                  <TreeDocuments node={child} documents={documents} locale={locale} />
                 </div>
               ))}
             </div>
@@ -211,5 +204,31 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
         <span>{ui.archiveNote}</span>
       </footer>
     </main>
+  );
+}
+
+function TreeDocuments({
+  node,
+  documents,
+  locale,
+}: {
+  node: TreeNode;
+  documents: ReturnType<typeof getDocuments>;
+  locale: Locale;
+}) {
+  return (
+    <>
+      {node.documentIds?.map((id) => {
+        const document = documents.find((item) => item.id === id);
+        return document ? (
+          <Link href={`/${locale}/research/${document.slug}`} key={id} className="tree-document">
+            {document.title} <ArrowUpRight size={13} />
+          </Link>
+        ) : null;
+      })}
+      {node.children?.map((child) => (
+        <TreeDocuments node={child} documents={documents} locale={locale} key={child.id} />
+      ))}
+    </>
   );
 }
