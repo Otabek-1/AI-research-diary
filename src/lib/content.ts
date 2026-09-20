@@ -40,11 +40,15 @@ const ui = { en: enUi, uz: uzUi, ru: ruUi };
 export function isLocale(value: string): value is Locale { return locales.includes(value as Locale); }
 export function getLocale(value?: string): Locale { return value && isLocale(value) ? value : defaultLocale; }
 export function getUi(locale: Locale) { return ui[locale]; }
-export function getDocuments(locale: Locale) { return docs[locale].filter((document) => document.status === "published"); }
-export function getDocument(slug: string, locale: Locale) { return docs[locale].find((document) => document.slug === slug && document.status === "published") ?? docs[defaultLocale].find((document) => document.slug === slug && document.status === "published"); }
+export function getDocuments(locale: Locale) {
+  const visibleIds = new Set(flattenTreeDocumentIds(trees[locale] ?? trees[defaultLocale]));
+  return docs[locale].filter((document) => document.status === "published" && visibleIds.has(document.id));
+}
+export function getDocument(slug: string, locale: Locale) { return getDocuments(locale).find((document) => document.slug === slug) ?? (locale !== defaultLocale ? getDocuments(defaultLocale).find((document) => document.slug === slug) : undefined); }
 export function getTree(locale: Locale) { return trees[locale] ?? trees[defaultLocale]; }
 export function getTranslationStatus(id: string) { return locales.reduce((status, locale) => ({ ...status, [locale]: docs[locale].some((document) => document.id === id) }), {} as Record<Locale, boolean>); }
 export function blockText(block: ContentBlock) { return "text" in block ? block.text : `${block.alt} ${block.caption}`; }
 export function readingTime(document: Document) { const words = document.content.map(blockText).join(" ").split(/\s+/).filter(Boolean).length; return Math.max(1, Math.ceil(words / 190)); }
 const sectionNames: Record<Locale, Record<string, string>> = { en: { "ai-research": "AI Research", foundations: "Foundations", "deep-learning": "Deep Learning" }, uz: { "ai-research": "AI tadqiqotlari", foundations: "Asoslar", "deep-learning": "Chuqur o'rganish" }, ru: { "ai-research": "Исследования ИИ", foundations: "Основы", "deep-learning": "Глубокое обучение" } };
 export function sectionLabel(section: string, locale: Locale = defaultLocale) { return section.split("/").map((part) => sectionNames[locale][part] ?? part.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())).join(" / "); }
+function flattenTreeDocumentIds(tree: Tree): string[] { return tree.roots.flatMap((node) => [...(node.documentIds ?? []), ...(node.children ? flattenTreeDocumentIds({ ...tree, roots: node.children }) : [])]); }
