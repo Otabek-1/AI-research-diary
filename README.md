@@ -27,6 +27,8 @@ Connect the repository to Netlify and use the default Node build environment. `n
 
 Set the server-only `EDITOR_PASSWORD_HASH` environment variable using a bcrypt hash. The private route and publish API use browser Basic Auth, fail closed when the hash is missing, send no-store/security headers, and throttle repeated failed attempts. The plaintext password is never stored in the repository, browser bundle, or Netlify logs.
 
+Turbopack keeps a record of the environment variables each compilation read inside its incremental cache, so the hash shows up in `.next/cache` during a build. `netlify.toml` therefore omits the cache directories from Netlify secrets scanning; deployed output is still scanned in full.
+
 ## Automatic publishing
 
 The private editor includes `Publish to GitHub`. Configure `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, and `GITHUB_BRANCH` in Netlify environment variables. The server commits the generated locale document and uploaded media through the GitHub Contents API; Netlify then rebuilds from that commit. The GitHub token is never exposed to browser code. ZIP export remains available as a manual fallback.
