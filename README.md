@@ -11,6 +11,10 @@ npm run dev
 
 Open `http://localhost:3000`. Production validation is `npm run lint` and `npm run build`.
 
+## Deploy on Netlify
+
+Connect the repository to Netlify and use the default Node build environment. `netlify.toml` runs `npm run build` and enables the official Next.js adapter, so direct requests to locale research URLs such as `/uz/research/neural-networks` are handled by Next instead of falling through to a static 404. Legacy `/article/<slug>` and `/<locale>/article/<slug>` links redirect to the canonical research URL.
+
 ## Content workflow
 
 - Published documents live under `content/` as deterministic JSON.
