@@ -3,26 +3,17 @@
   "updatedAt": "2026-09-20",
   "roots": [
     {
-      "id": "ai-research",
-      "title": "AI Research",
-      "description": "Foundations, methods, and open questions.",
-      "children": [
-        {
-          "id": "foundations",
-          "title": "Foundations",
-          "children": []
-        },
-        {
-          "id": "deep-learning",
-          "title": "Deep Learning",
-          "children": []
-        }
+      "id": "section-1789927259005",
+      "title": "Where it begins",
+      "children": [],
+      "documentIds": [
+        "new-research-1789927288797"
       ]
     },
     {
-      "id": "field-notes",
-      "title": "Field Notes",
-      "description": "Observations from the edge of the map.",
+      "id": "ai-research",
+      "title": "AI Research",
+      "description": "Foundations, methods, and open questions.",
       "children": []
     }
   ]
