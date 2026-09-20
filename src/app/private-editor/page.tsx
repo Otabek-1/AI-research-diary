@@ -200,6 +200,24 @@ export default function PrivateEditor() {
     }));
     setMessage("New section added locally");
   }
+  function addSubsection(parentId: string) {
+    const title = window.prompt("New subsection name", "New section")?.trim();
+    if (!title) return;
+    const section = { id: `section-${Date.now()}`, title, children: [] as TreeNode[] };
+    setTree((current) => ({ ...current, roots: insertTreeChild(current.roots, parentId, section) }));
+    setMessage(`Created ${title} inside the selected section`);
+  }
+  function createDocumentInSection(sectionId: string) {
+    const section = findTreeNode(tree.roots, sectionId);
+    const sectionPath = findTreePath(tree.roots, sectionId).join("/") || "field-notes";
+    const id = `new-research-${Date.now()}`;
+    const nextDocument: Document = { ...starter, id, slug: id, title: "Untitled research", section: sectionPath, createdAt: today, updatedAt: today };
+    setSelectedId(id);
+    setDocument(nextDocument);
+    setDocuments((current) => [...current, nextDocument]);
+    setTree((current) => ({ ...current, roots: addDocumentToTree(current.roots, sectionId, id) }));
+    setMessage(`New research created inside ${section?.title ?? "the selected section"}`);
+  }
   function renameTreeNode(nodeId: string, currentTitle: string) {
     const nextTitle = window.prompt("Rename section", currentTitle)?.trim();
     if (!nextTitle || nextTitle === currentTitle) return;
@@ -385,6 +403,8 @@ export default function PrivateEditor() {
             onRename={renameTreeNode}
             onDelete={deleteTreeNode}
             onDeleteDocument={deleteDocument}
+            onAddSection={addSubsection}
+            onAddDocument={createDocumentInSection}
           />
           <div className="sidebar-bottom">
             <label className="workspace-upload">
@@ -688,6 +708,8 @@ function TreeView({
   onRename,
   onDelete,
   onDeleteDocument,
+  onAddSection,
+  onAddDocument,
   depth = 0,
 }: {
   nodes: TreeNode[];
@@ -698,6 +720,8 @@ function TreeView({
   onRename: (nodeId: string, title: string) => void;
   onDelete: (nodeId: string, title: string) => void;
   onDeleteDocument: (documentId: string) => void;
+  onAddSection: (nodeId: string) => void;
+  onAddDocument: (nodeId: string) => void;
   depth?: number;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -742,7 +766,7 @@ function TreeView({
               )}
               </button>
               <span>{node.title}</span>
-              <span className="tree-node-actions"><button onClick={(event) => { event.stopPropagation(); onRename(node.id, node.title); }} aria-label={`Rename ${node.title}`}>Edit</button><button onClick={(event) => { event.stopPropagation(); onDelete(node.id, node.title); }} aria-label={`Delete ${node.title}`}><Trash2 size={12} /></button></span>
+              <span className="tree-node-actions"><button onClick={(event) => { event.stopPropagation(); onAddSection(node.id); }} aria-label={`Add subsection inside ${node.title}`}>+ section</button><button onClick={(event) => { event.stopPropagation(); onAddDocument(node.id); }} aria-label={`Add research inside ${node.title}`}>+ research</button><button onClick={(event) => { event.stopPropagation(); onRename(node.id, node.title); }} aria-label={`Rename ${node.title}`}>Edit</button><button onClick={(event) => { event.stopPropagation(); onDelete(node.id, node.title); }} aria-label={`Delete ${node.title}`}><Trash2 size={12} /></button></span>
             </div>
             {!isCollapsed &&
               node.documentIds?.map((id) => (
@@ -766,6 +790,8 @@ function TreeView({
                 onRename={onRename}
                 onDelete={onDelete}
                 onDeleteDocument={onDeleteDocument}
+                onAddSection={onAddSection}
+                onAddDocument={onAddDocument}
                 depth={depth + 1}
               />
             )}
@@ -933,6 +959,16 @@ function removeDocumentFromTree(nodes: TreeNode[], documentId: string): TreeNode
 function collectDocumentIds(nodes: TreeNode[], targetId: string, inside = false): string[] {
   return nodes.flatMap((node) => { const isInside = inside || node.id === targetId; return [...(isInside ? node.documentIds ?? [] : []), ...(node.children ? collectDocumentIds(node.children, targetId, isInside) : [])]; });
 }
+function findTreeNode(nodes: TreeNode[], nodeId: string): TreeNode | undefined {
+  for (const node of nodes) { if (node.id === nodeId) return node; const match = node.children && findTreeNode(node.children, nodeId); if (match) return match; }
+  return undefined;
+}
+function findTreePath(nodes: TreeNode[], nodeId: string, parents: string[] = []): string[] {
+  for (const node of nodes) { const next = [...parents, node.id]; if (node.id === nodeId) return next; if (node.children) { const match = findTreePath(node.children, nodeId, next); if (match.length) return match; } }
+  return [];
+}
+function insertTreeChild(nodes: TreeNode[], parentId: string, child: TreeNode): TreeNode[] { return nodes.map((node) => node.id === parentId ? { ...node, children: [...(node.children ?? []), child] } : node.children ? { ...node, children: insertTreeChild(node.children, parentId, child) } : node); }
+function addDocumentToTree(nodes: TreeNode[], sectionId: string, documentId: string): TreeNode[] { return nodes.map((node) => node.id === sectionId ? { ...node, documentIds: [...(node.documentIds ?? []), documentId] } : node.children ? { ...node, children: addDocumentToTree(node.children, sectionId, documentId) } : node); }
 function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
