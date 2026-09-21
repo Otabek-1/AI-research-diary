@@ -1,0 +1,12 @@
+
+> field-notes-research-archive@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.5 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.31.80.1:3000
+- Environments: .env.local
+✓ Ready in 865ms
+✓ Running next.config.ts took 59ms
+Creating turbopack project { dir: 'C:\\Users\\Otabek\\AI research diary', testMode: true }
+

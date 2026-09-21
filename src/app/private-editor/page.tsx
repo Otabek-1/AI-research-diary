@@ -25,15 +25,17 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ContentBlock,
   Document,
   getDocuments,
+  getSectionLabels,
   getTranslationStatus,
   getTree,
   Locale,
   locales,
+  Tree,
   TreeNode,
 } from "@/lib/content";
 
@@ -50,6 +52,8 @@ type EditableBlock =
   | { type: "divider"; text: string }
   | ImageBlock;
 const today = new Date().toISOString().slice(0, 10);
+const visibleStatuses: Document["status"][] = ["published", "in-progress"];
+type PublishFile = { path: string; content: string; encoding: "utf8" | "base64" };
 const starter: Document = {
   schemaVersion: 1,
   id: "new-research-note",
@@ -75,7 +79,15 @@ export default function PrivateEditor() {
   const [selectedId, setSelectedId] = useState(starter.id);
   const [document, setDocument] = useState<Document>(() => starter);
   const [tree, setTree] = useState(() => getTree("en"));
+  const [sectionLabels, setSectionLabels] = useState<Record<string, string>>(() =>
+    getSectionLabels(),
+  );
+  const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
+  const [draftTouched, setDraftTouched] = useState<Record<string, boolean>>({});
+  const [imported, setImported] = useState<Document[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<PublishFile[]>([]);
   const [deletedPaths, setDeletedPaths] = useState<string[]>([]);
+  const [publishedRevision, setPublishedRevision] = useState(0);
   const [message, setMessage] = useState("Saved locally");
   const [treeFilter, setTreeFilter] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
@@ -86,6 +98,30 @@ export default function PrivateEditor() {
   const [rightWidth, setRightWidth] = useState(250);
   const status = getTranslationStatus(selectedId);
   const headings = document.content.filter((block) => block.type === "heading");
+  const titleDraft = titleDrafts[locale];
+  const library = useMemo(() => {
+    const byId = new Map<string, Document>();
+    [...documents, ...imported].forEach((item) => {
+      if (item?.id && !byId.has(item.id)) byId.set(item.id, item);
+    });
+    // Documents the editor has re-opened, edited but not published yet stay reachable
+    // through the library tree even after a reload.
+    const locals = locales.flatMap((code) =>
+      Object.keys(draftTouched).some((key) => key.startsWith(`${code}:`) && draftTouched[key])
+        ? headersFor(code).flatMap((id) => [readLocalDraft(code, id)])
+        : [],
+    );
+    [...locals, ...imported].forEach((item) => {
+      if (item?.id && !byId.has(item.id)) byId.set(item.id, item);
+    });
+    return [...byId.values()];
+  }, [documents, imported, draftTouched]);
+  const visibleTree = useMemo(() => localizedTree(tree, sectionLabels), [tree, sectionLabels]);
+  const visibleDocuments = useMemo(
+    () => publishedLibrary(library, visibleTree),
+    [library, visibleTree],
+  );
+  void publishedRevision;
 
   useEffect(() => {
     const saved = window.localStorage.getItem(
@@ -101,6 +137,7 @@ export default function PrivateEditor() {
       }
     }, 0);
     return () => window.clearTimeout(timer);
+    // Only re-open a document when the document or language changes.
   }, [locale, selectedId]);
   useEffect(() => {
     window.localStorage.setItem(
@@ -110,18 +147,34 @@ export default function PrivateEditor() {
   }, [document, locale, selectedId]);
   useEffect(() => {
     const savedTree = window.localStorage.getItem("field-notes-tree-shared");
+    const savedLabels = window.localStorage.getItem("field-notes-section-labels");
+    const savedPending = window.localStorage.getItem("field-notes-pending-files");
     const savedDeletes = window.localStorage.getItem(`field-notes-deletes-${locale}`);
     const timer = window.setTimeout(() => {
       if (savedTree) { try { setTree(JSON.parse(savedTree)); } catch { /* Ignore an invalid local tree draft. */ } }
+      if (savedLabels) { try { setSectionLabels(JSON.parse(savedLabels)); } catch { /* Ignore invalid section names. */ } }
+      if (savedPending) { try { setPendingFiles(JSON.parse(savedPending)); } catch { /* Ignore an invalid publish queue. */ } }
       if (savedDeletes) { try { setDeletedPaths(JSON.parse(savedDeletes)); } catch { /* Ignore an invalid local delete draft. */ } }
     }, 0);
     return () => window.clearTimeout(timer);
   }, [locale]);
   useEffect(() => { window.localStorage.setItem("field-notes-tree-shared", JSON.stringify(tree)); }, [tree]);
+  useEffect(() => { window.localStorage.setItem("field-notes-section-labels", JSON.stringify(sectionLabels)); }, [sectionLabels]);
   useEffect(() => { window.localStorage.setItem(`field-notes-deletes-${locale}`, JSON.stringify(deletedPaths)); }, [locale, deletedPaths]);
+  useEffect(() => { window.localStorage.setItem("field-notes-pending-files", JSON.stringify(pendingFiles)); }, [pendingFiles]);
   useEffect(() => { const saved = window.localStorage.getItem("field-notes-workspace-widths"); if (!saved) return; const timer = window.setTimeout(() => { try { const widths = JSON.parse(saved) as { left?: number; right?: number }; if (widths.left) setLeftWidth(widths.left); if (widths.right) setRightWidth(widths.right); } catch { /* Ignore invalid layout preferences. */ } }, 0); return () => window.clearTimeout(timer); }, []);
   useEffect(() => { window.localStorage.setItem("field-notes-workspace-widths", JSON.stringify({ left: leftWidth, right: rightWidth })); }, [leftWidth, rightWidth]);
 
+  async function uploadSoon(label: string, build: () => Promise<PublishFile[]>) {
+    try {
+      const files = await build();
+      const stale = new Set(files.map((file) => file.path));
+      setPendingFiles((current) => [...current.filter((file) => !stale.has(file.path)), ...files]);
+      setMessage(`${label} queued — press Publish to GitHub to make it public.`);
+    } catch {
+      setMessage(`${label} could not be prepared locally.`);
+    }
+  }
   function openDocument(id: string) {
     const next = documents.find((item) => item.id === id) ?? readLocalDraft(locale, id);
     if (next) {
@@ -134,10 +187,14 @@ export default function PrivateEditor() {
   }
   function switchLocale(nextLocale: Locale) {
     const nextDocuments = getDocuments(nextLocale);
+    const local = readLocalDraft(nextLocale, selectedId);
     setLocale(nextLocale);
-    setTree(getTree(nextLocale));
-    setDocuments(nextDocuments);
-    const next = nextDocuments.find((item) => item.id === selectedId);
+    setDocuments(
+      local && !nextDocuments.some((item) => item.id === local.id)
+        ? [...nextDocuments, local]
+        : nextDocuments,
+    );
+    const next = nextDocuments.find((item) => item.id === selectedId) ?? local;
     setDocument(
       next ?? {
         ...document,
@@ -150,6 +207,50 @@ export default function PrivateEditor() {
   }
   function updateDocument(patch: Partial<Document>) {
     setDocument((current) => ({ ...current, ...patch, updatedAt: today }));
+    if (!patch.slug || patch.slug === document.slug) return;
+    // Moving the slug moves the JSON file on GitHub, so the old path has to go too.
+    const previous = `content/locales/${locale}/${document.slug}.json`;
+    const moved = [...locales.map((code) => `content/locales/${code}/${document.slug}.json`), previous];
+    setDeletedPaths((current) => [
+      ...new Set([...current, ...moved].filter((path) => path !== `content/locales/${locale}/${patch.slug}.json`)),
+    ]);
+  }
+  function updateDocumentTitle(title: string) {
+    const fresh = !document.slug || document.slug === "new-research-note" || /^new-research-\d+$/.test(document.slug);
+    updateDocument({
+      title,
+      ...(fresh ? { slug: slugFromTitle(title) } : {}),
+      seo: { ...document.seo, title: document.seo.title || title },
+    });
+  }
+  function renameSection(nodeId: string, title: string) {
+    setSectionLabels((current) => ({ ...current, [nodeId]: title }));
+    setTree((current) => ({ ...current, roots: updateTreeNode(current.roots, nodeId, { title }) }));
+    uploadSoon(`Rename section to “${title}”`, async () => [
+      await buildSectionFile(getLocaleTree(tree, { ...sectionLabels, [nodeId]: title }, {}), nodeId, { ...sectionLabels, [nodeId]: title }),
+    ]);
+  }
+  function renameDocument(documentId: string, title: string, sectionId: string) {
+    const clean = title.trim();
+    if (!clean) return;
+    setSectionLabels((current) => ({ ...current, [documentId]: clean }));
+    setDocuments((current) => current.map((item) => (item.id === documentId ? { ...item, title: clean } : item)));
+    if (documentId === selectedId) updateDocumentTitle(clean);
+    uploadSoon(`Rename research to “${clean}”`, async () => {
+      const files: PublishFile[] = [];
+      for (const code of locales) {
+        const local = documentId === selectedId
+          ? { ...document, title: code === locale ? clean : document.title }
+          : readLocalDraft(code, documentId);
+        const fallback = getDocuments(code).find((item) => item.id === documentId);
+        const source = local ?? fallback;
+        if (!source) continue;
+        const doc = code === locale ? { ...source, title: clean } : source;
+        files.push(serializeDocument(doc).file(`content/locales/${code}/${source.slug}.json`));
+      }
+      files.push(await buildSectionFile(tree, sectionId, { ...sectionLabels, [sectionId]: clean }));
+      return files;
+    });
   }
   function updateBlock(index: number, patch: Partial<EditableBlock>) {
     setDocument((current) => ({
@@ -195,14 +296,16 @@ export default function PrivateEditor() {
     setMessage("Tree order saved locally");
   }
   function addSection() {
-    setTree((current) => ({
-      ...current,
-      roots: [
-        ...current.roots,
-        { id: `section-${Date.now()}`, title: "New section", children: [] },
-      ],
-    }));
-    setMessage("New section added locally");
+    const title = window.prompt("New section name", "New section")?.trim();
+    if (!title) return;
+    const id = `section-${Date.now()}`;
+    const nextLabels = { ...sectionLabels, [id]: title };
+    setSectionLabels(nextLabels);
+    const nextTree = { ...tree, roots: [...tree.roots, { id, title, children: [] }] };
+    setTree(nextTree);
+    // The public page reads section names from content/sections.json, so a section only
+    // becomes visible after that file is published together with the tree.
+    uploadSoon(`Add section “${title}”`, async () => [await buildSectionFile(nextTree, id, nextLabels)]);
   }
   function resizePanel(side: "left" | "right", event: React.PointerEvent<HTMLDivElement>) {
     const startX = event.clientX;
@@ -215,43 +318,70 @@ export default function PrivateEditor() {
   function addSubsection(parentId: string) {
     const title = window.prompt("New subsection name", "New section")?.trim();
     if (!title) return;
-    const section = { id: `section-${Date.now()}`, title, children: [] as TreeNode[] };
-    setTree((current) => ({ ...current, roots: insertTreeChild(current.roots, parentId, section) }));
-    setMessage(`Created ${title} inside the selected section`);
+    const id = `section-${Date.now()}`;
+    const section = { id, title, children: [] as TreeNode[] };
+    const nextLabels = { ...sectionLabels, [id]: title };
+    setSectionLabels(nextLabels);
+    const nextTree = { ...tree, roots: insertTreeChild(tree.roots, parentId, section) };
+    setTree(nextTree);
+    uploadSoon(`Add section “${title}”`, async () => [await buildSectionFile(nextTree, id, nextLabels)]);
   }
   function createDocumentInSection(sectionId: string) {
-    const section = findTreeNode(tree.roots, sectionId);
-    const sectionPath = findTreePath(tree.roots, sectionId).join("/") || "field-notes";
+    const title = window.prompt("New research title", "Untitled research")?.trim() || "Untitled research";
     const id = `new-research-${Date.now()}`;
-    const nextDocument: Document = { ...starter, id, slug: id, title: "Untitled research", section: sectionPath, createdAt: today, updatedAt: today };
+    const slug = createSlug(title, documents, imported);
+    const nextDocument: Document = {
+      ...starter,
+      id,
+      slug,
+      title,
+      section: sectionId,
+      status: "published",
+      publishedAt: today,
+      createdAt: today,
+      updatedAt: today,
+      seo: { title, description: "" },
+      content: [{ type: "paragraph", text: "Start writing your research note..." }],
+    };
     setSelectedId(id);
     setDocument(nextDocument);
+    setSectionLabels((current) => ({ ...current, [id]: title }));
     setDocuments((current) => [...current, nextDocument]);
+    window.localStorage.setItem(`field-notes-draft-${locale}-${id}`, JSON.stringify(nextDocument));
     setTree((current) => ({ ...current, roots: addDocumentToTree(current.roots, sectionId, id) }));
-    setMessage(`New research created inside ${section?.title ?? "the selected section"}`);
+    const ready = findTreeNode(tree.roots, sectionId)?.title ?? sectionLabels[sectionId] ?? "the selected section";
+    setMessage(`Draft “${title}” created as /${slug} inside ${ready}. Press Publish to GitHub to make it public.`);
+    // A section without any published document never reaches the public page, so the
+    // section is queued here and committed together with the new research.
+    const anchors = findTreePath(tree.roots, sectionId);
+    if (anchors.length) uploadSoon(`Publish section “${ready}”`, async () => [await buildSectionFile(tree, sectionId, { ...sectionLabels, [sectionId]: ready })]);
   }
-  function renameTreeNode(nodeId: string, currentTitle: string) {
-    const nextTitle = window.prompt("Rename section", currentTitle)?.trim();
-    if (!nextTitle || nextTitle === currentTitle) return;
-    setTree((current) => ({ ...current, roots: updateTreeNode(current.roots, nodeId, { title: nextTitle }) }));
-    setMessage("Section renamed locally");
+  function renameTreeNode(nodeId: string, title: string) {
+    const nextTitle = window.prompt("Rename section", title)?.trim();
+    if (!nextTitle || nextTitle === title) return;
+    renameSection(nodeId, nextTitle);
+    setMessage(`Renamed to “${nextTitle}”. Press Publish to GitHub to update the public page.`);
   }
   function deleteTreeNode(nodeId: string, title: string) {
     if (!window.confirm(`Delete section “${title}” and its nested sections?`)) return;
     const deletedIds = collectDocumentIds(tree.roots, nodeId);
-    const deletedSlugs = documents.filter((item) => deletedIds.includes(item.id)).flatMap((item) => locales.map((language) => `content/locales/${language}/${item.slug}.json`));
-    setDeletedPaths((current) => [...new Set([...current, ...deletedSlugs])]);
-    setTree((current) => ({ ...current, roots: removeTreeNode(current.roots, nodeId) }));
-    setMessage("Section deleted locally");
+    const nextTree = { ...tree, roots: removeTreeNode(tree.roots, nodeId) };
+    const deletedSlugs = library.filter((item) => deletedIds.includes(item.id)).flatMap((item) => locales.map((language) => `content/locales/${language}/${item.slug}.json`));
+    setDeletedPaths((current) => [...new Set([...current, ...deletedSlugs, "content/sections.json", "content/tree.json"])]);
+    setTree(nextTree);
+    uploadSoon(`Delete section “${title}”`, async () => [await fileFromText("content/tree.json", `${JSON.stringify(nextTree, null, 2)}\n`)]);
+    setMessage(`Section “${title}” removed locally. Press Publish to GitHub to remove it from the public page.`);
   }
   function deleteDocument(documentId: string) {
-    const target = documents.find((item) => item.id === documentId);
+    const target = library.find((item) => item.id === documentId);
     if (!target || !window.confirm(`Remove “${target.title}” from this editor tree?`)) return;
+    const nextTree = { ...tree, roots: removeDocumentFromTree(tree.roots, documentId) };
     setDocuments((current) => current.filter((item) => item.id !== documentId));
-    setTree((current) => ({ ...current, roots: removeDocumentFromTree(current.roots, documentId) }));
+    setTree(nextTree);
     setDeletedPaths((current) => [...new Set([...current, ...locales.map((language) => `content/locales/${language}/${target.slug}.json`)])]);
     if (selectedId === documentId) { setSelectedId("new-research-note"); setDocument(starter); }
-    setMessage("Document removed locally");
+    uploadSoon(`Remove research “${target.title}”`, async () => [await fileFromText("content/tree.json", `${JSON.stringify(nextTree, null, 2)}\n`)]);
+    setMessage(`“${target.title}” removed locally. Press Publish to GitHub to remove it from the public page.`);
   }
   function renameHeading(id: string, currentText: string) {
     const nextText = window.prompt("Rename heading", currentText)?.trim();
@@ -283,7 +413,9 @@ export default function PrivateEditor() {
     const errors: string[] = [];
     if (!document.title.trim()) errors.push("Title is required");
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(document.slug))
-      errors.push("Slug must use lowercase letters and hyphens");
+      errors.push("Filename must use lowercase letters and hyphens (letters, numbers and single hyphens only)");
+    else if (/^new-research-\d+$/.test(document.slug))
+      errors.push("Filename is still the generated placeholder — type a title or set a real filename");
     if (!document.id.trim()) errors.push("Stable document ID is required");
     return errors;
   }
@@ -291,6 +423,10 @@ export default function PrivateEditor() {
     const errors = validate();
     if (errors.length) {
       setMessage(errors.join(" | "));
+      return;
+    }
+    if (!findTreeNode(tree.roots, document.section)) {
+      setMessage("Choose a section for this research first, then export.");
       return;
     }
     const { serialized, media } = serializeDocument(document);
@@ -304,10 +440,15 @@ export default function PrivateEditor() {
     else {
       const zip = new JSZip();
       zip.file(path, json);
+      zip.file(
+        "content/tree.json",
+        `${JSON.stringify({ ...tree, roots: addDocumentToTree(tree.roots, document.section, document.id) }, null, 2)}\n`,
+      );
+      zip.file("content/sections.json", `${JSON.stringify(sectionLabelsFile(sectionLabels), null, 2)}\n`);
       media.forEach((asset) => zip.file(asset.path, asset.base64, { base64: true }));
       zip.file(
         "README.txt",
-        `Field / Notes visual editor export\nLanguage: ${locale}\nDocument: ${document.id}\n`,
+        `Field / Notes visual editor export\nLanguage: ${locale}\nDocument: ${document.id}\n\nReplace these files in the repository, then commit and push.\n`,
       );
       download(
         await zip.generateAsync({ type: "blob" }),
@@ -318,15 +459,37 @@ export default function PrivateEditor() {
       `Ready to export: ${path}${media.length ? ` + ${media.length} media asset(s)` : ""}`,
     );
   }
+  function collectPublishFiles(): { files: PublishFile[]; errors: string[] } {
+    const files = new Map<string, PublishFile>();
+    const errors: string[] = [];
+    for (const file of pendingFiles) files.set(file.path, file);
+    const visibleTree = localizedTree(tree, sectionLabels);
+    files.set("content/tree.json", utf8File("content/tree.json", visibleTree));
+    files.set("content/sections.json", utf8File("content/sections.json", sectionLabelsFile(sectionLabels)));
+    if (document.id !== starter.id) {
+      errors.push(...validate());
+      if (!findTreeNode(tree.roots, document.section))
+        errors.push(`Section “${document.section}” is missing from the tree — create it first`);
+      if (!files.has(`content/locales/${locale}/${document.slug}.json`)) {
+        const { serialized, media } = serializeDocument(document);
+        files.set(`content/locales/${locale}/${document.slug}.json`, utf8File(`content/locales/${locale}/${document.slug}.json`, serialized));
+        media.forEach((asset) => files.set(asset.path, { path: asset.path, content: asset.base64, encoding: "base64" }));
+      }
+    }
+    return { files: [...files.values()], errors };
+  }
   async function publishToGitHub() {
-    const errors = document.id !== "new-research-note" ? validate() : [];
-    if (errors.length && !deletedPaths.length) { setMessage(errors.join(" | ")); return; }
+    const { files, errors } = collectPublishFiles();
+    if (errors.length) { setMessage(errors.join(" | ")); return; }
     setMessage("Publishing to GitHub...");
-    const files: { path: string; content: string; encoding: "utf8" | "base64" }[] = [{ path: "content/tree.json", content: JSON.stringify(tree, null, 2) + "\n", encoding: "utf8" }];
-    if (document.id !== "new-research-note") { const { serialized, media } = serializeDocument(document); files.push({ path: `content/locales/${locale}/${document.slug}.json`, content: JSON.stringify(serialized, null, 2) + "\n", encoding: "utf8" }, ...media.map((asset) => ({ path: asset.path, content: asset.base64, encoding: "base64" as const }))); }
     const response = await fetch("/api/admin/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files, deletes: deletedPaths, message: `Update research structure (${locale})` }) });
-    const result = await response.json() as { ok?: boolean; error?: string };
-    if (response.ok && result.ok) { setDeletedPaths([]); setMessage("Published to GitHub. Deleted files and tree changes are now in the deploy queue."); } else setMessage(result.error || "GitHub publish failed.");
+    const result = await response.json() as { ok?: boolean; error?: string; detail?: string };
+    if (response.ok && result.ok) {
+      setPendingFiles([]);
+      setDeletedPaths([]);
+      setPublishedRevision((revision) => revision + 1);
+      setMessage(`Published to GitHub: ${files.length} file(s) committed. The public page shows them once Netlify finishes rebuilding.`);
+    } else setMessage(result.error || result.detail || "GitHub publish failed.");
   }
   function importFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -337,9 +500,11 @@ export default function PrivateEditor() {
         const parsed = JSON.parse(String(reader.result)) as Document;
         if (!parsed.id || !parsed.title || !Array.isArray(parsed.content))
           throw new Error("This document is missing required fields.");
+        setImported((current) => [...current.filter((item) => item.id !== parsed.id), parsed]);
+        setSectionLabels((current) => ({ ...current, [parsed.id]: current[parsed.id] ?? parsed.title }));
         setSelectedId(parsed.id);
         setDocument(parsed);
-        setMessage("Document imported into visual editor");
+        setMessage("Document imported. Pick a section in Metadata, then Publish to GitHub.");
       } catch (error) {
         setMessage(
           error instanceof Error ? error.message : "Could not import document",
@@ -384,7 +549,7 @@ export default function PrivateEditor() {
             <Download size={15} /> Finish & Export
           </button>
           <button className="workspace-button workspace-primary" onClick={publishToGitHub}>
-            <Upload size={15} /> Publish to GitHub
+            <Upload size={15} /> Publish to GitHub{pendingFiles.length ? ` (${pendingFiles.length})` : ""}
           </button>
         </div>
       </header>
@@ -407,12 +572,14 @@ export default function PrivateEditor() {
             </button>
           </div>
           <TreeView
-            nodes={tree.roots}
+            nodes={visibleTree.roots}
             filter={treeFilter}
             selectedId={selectedId}
+            labels={{ ...sectionLabels, ...Object.fromEntries(visibleDocuments.map((item) => [item.id, item.title])) }}
             onSelect={openDocument}
             onReorder={moveTreeNode}
             onRename={renameTreeNode}
+            onRenameDocument={renameDocument}
             onDelete={deleteTreeNode}
             onDeleteDocument={deleteDocument}
             onAddSection={addSubsection}
@@ -457,10 +624,18 @@ export default function PrivateEditor() {
           <div className="editor-document">
             <input
               className="title-input"
-              value={document.title}
-              onChange={(event) =>
-                updateDocument({ title: event.target.value })
-              }
+              value={titleDraft ?? document.title}
+              onFocus={() => setDraftTouched((current) => ({ ...current, [`${locale}:${selectedId}`]: true }))}
+              onBlur={() => setTitleDrafts((current) => {
+                const next = { ...current };
+                delete next[locale];
+                return next;
+              })}
+              onChange={(event) => {
+                const title = event.target.value;
+                setTitleDrafts((current) => ({ ...current, [locale]: title }));
+                updateDocumentTitle(title);
+              }}
               aria-label="Document title"
             />
             <textarea
@@ -576,6 +751,24 @@ export default function PrivateEditor() {
             {showMetadata && (
               <div className="metadata-fields">
                 <label>
+                  Section
+                  <select
+                    value={document.section}
+                    onChange={(event) => {
+                      const sectionId = event.target.value;
+                      updateDocument({ section: sectionId });
+                      setTree((current) => ({ ...current, roots: addDocumentToTree(current.roots, sectionId, document.id) }));
+                      setMessage(` under ${sectionLabels[sectionId] ?? titleCase(sectionId)}. Press Publish to GitHub to store it there.`);
+                    }}
+                  >
+                    {tree.roots.map((root) => [root, ...collectTreeNodes(root.children ?? [])].map((node) => (
+                      <option key={`${root.id}-${node.id}`} value={node.id}>
+                        {`${sectionLabelFrom(tree, sectionLabels, node.id)}${node.id === root.id ? "" : ` (${titleCase(root.title)})`}`}
+                      </option>
+                    )))}
+                  </select>
+                </label>
+                <label>
                   Status
                   <select
                     value={document.status}
@@ -585,20 +778,22 @@ export default function PrivateEditor() {
                       })
                     }
                   >
-                    <option value="draft">Draft</option>
-                    <option value="in-progress">In progress</option>
-                    <option value="published">Published</option>
-                    <option value="archived">Archived</option>
+                    <option value="draft">Draft (hidden from the public page)</option>
+                    <option value="in-progress">In progress (visible)</option>
+                    <option value="published">Published (visible)</option>
+                    <option value="archived">Archived (hidden)</option>
                   </select>
                 </label>
                 <label>
-                  Slug
+                  Filename (URL)
                   <input
                     value={document.slug}
-                    onChange={(event) =>
-                      updateDocument({ slug: event.target.value })
-                    }
+                    onChange={(event) => updateDocument({ slug: event.target.value })}
+                    placeholder="my-research-note"
                   />
+                  <small className="field-hint">
+                    Used in /{locale}/research/{document.slug || "..."} and as the JSON file name.
+                  </small>
                 </label>
                 <label>
                   Tags
@@ -715,9 +910,11 @@ function TreeView({
   nodes,
   filter,
   selectedId,
+  labels,
   onSelect,
   onReorder,
   onRename,
+  onRenameDocument,
   onDelete,
   onDeleteDocument,
   onAddSection,
@@ -727,9 +924,11 @@ function TreeView({
   nodes: TreeNode[];
   filter: string;
   selectedId: string;
+  labels: Record<string, string>;
   onSelect: (id: string) => void;
   onReorder: (dragId: string, targetId: string) => void;
   onRename: (nodeId: string, title: string) => void;
+  onRenameDocument: (documentId: string, title: string, sectionId: string) => void;
   onDelete: (nodeId: string, title: string) => void;
   onDeleteDocument: (documentId: string) => void;
   onAddSection: (nodeId: string) => void;
@@ -782,24 +981,32 @@ function TreeView({
             </div>
             {!isCollapsed &&
               node.documentIds?.map((id) => (
-                <button
+                <div
                   className={`tree-document-item ${selectedId === id ? "selected" : ""}`}
                   key={id}
                   onClick={() => onSelect(id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect(id); }}
                 >
                   <GripVertical size={12} />
-                  {id.replace(/-/g, " ")}
-                  <span className="tree-document-delete" onClick={(event) => { event.stopPropagation(); onDeleteDocument(id); }}><Trash2 size={12} /></span>
-                </button>
+                  <span>{labels[id] ?? titleCase(id)}</span>
+                  <span className="tree-document-actions">
+                    <button aria-label={`Rename ${labels[id] ?? id}`} onClick={(event) => { event.stopPropagation(); const next = window.prompt("Rename research", labels[id] ?? titleCase(id))?.trim(); if (next) onRenameDocument(id, next, node.id); }}>Edit</button>
+                    <button aria-label={`Delete ${labels[id] ?? id}`} onClick={(event) => { event.stopPropagation(); onDeleteDocument(id); }}><Trash2 size={12} /></button>
+                  </span>
+                </div>
               ))}
             {!isCollapsed && node.children && (
               <TreeView
                 nodes={node.children}
                 filter={filter}
                 selectedId={selectedId}
+                labels={labels}
                 onSelect={onSelect}
                 onReorder={onReorder}
                 onRename={onRename}
+                onRenameDocument={onRenameDocument}
                 onDelete={onDelete}
                 onDeleteDocument={onDeleteDocument}
                 onAddSection={onAddSection}
@@ -953,11 +1160,89 @@ function serializeDocument(document: Document) {
     if (block.type !== "image" || !block.src.startsWith("data:")) return block;
     const match = block.src.match(/^data:[^;]+;base64,(.+)$/);
     if (!match) return block;
-    const path = block.assetPath ?? `public/media/images/${document.section}/${document.slug}/image-${media.length + 1}.bin`;
+    const path = block.assetPath ?? `public/media/images/${mediaSlug(document)}/image-${media.length + 1}.bin`;
     media.push({ path, base64: match[1] });
     return { ...block, src: `/${path.replace(/^public\//, "")}`, assetPath: path };
   });
-  return { serialized: { ...document, content, updatedAt: today }, media };
+  const serialized = { ...document, content, updatedAt: today };
+  return {
+    serialized,
+    media,
+    file: (path: string) => utf8File(path, serialized),
+  };
+}
+function utf8File(path: string, value: unknown): PublishFile {
+  return { path, content: `${JSON.stringify(value, null, 2)}\n`, encoding: "utf8" };
+}
+async function fileFromText(path: string, content: string): Promise<PublishFile> {
+  return { path, content, encoding: "utf8" };
+}
+function mediaSlug(document: Document) {
+  if (document.section) return `${document.section}/${document.slug}`.replace(/[^a-z0-9/]+/gi, "-").replace(/\/{2,}/g, "/");
+  return document.slug;
+}
+function slugFromTitle(title: string) {
+  const slug = title
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+  return slug || "untitled";
+}
+function createSlug(title: string, ...collections: Document[][]) {
+  const taken = new Set(collections.flat().map((item) => item.slug));
+  const base = slugFromTitle(title);
+  let candidate = base;
+  let index = 2;
+  while (taken.has(candidate) || /^new-research-\d+$/.test(candidate)) candidate = `${base}-${index++}`;
+  return candidate;
+}
+function titleCase(value: string) {
+  return value.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+function collectTreeNodes(nodes: TreeNode[]): TreeNode[] {
+  return nodes.flatMap((node) => [node, ...collectTreeNodes(node.children ?? [])]);
+}
+function sectionLabelFrom(tree: Tree, labels: Record<string, string>, nodeId: string) {
+  const path = findTreePath(tree.roots, nodeId);
+  if (!path.length) return titleCase(nodeId);
+  return path.map((id) => labels[id] ?? titleCase(id)).join(" / ");
+}
+function headersFor(locale: Locale) {
+  return getDocuments(locale).map((item) => item.id);
+}
+function publishedLibrary(documents: Document[], tree: Tree) {
+  const visible = new Set(flattenTreeIds(tree));
+  const allowed = new Set<Document["status"]>(visibleStatuses);
+  return documents.filter((item) => visible.has(item.id) && allowed.has(item.status));
+}
+function flattenTreeIds(tree: Tree): string[] {
+  const walk = (nodes: TreeNode[]): string[] =>
+    nodes.flatMap((node) => [...(node.documentIds ?? []), ...walk(node.children ?? [])]);
+  return walk(tree.roots);
+}
+function localizedTree(tree: Tree, labels: Record<string, string>): Tree {
+  const localize = (nodes: TreeNode[]): TreeNode[] =>
+    nodes.map((node) => ({
+      ...node,
+      title: labels[node.id] ?? node.title,
+      children: node.children ? localize(node.children) : node.children,
+    }));
+  return { ...tree, roots: localize(tree.roots) };
+}
+function getLocaleTree(tree: Tree, labels: Record<string, string>, extra: Record<string, string>): Tree {
+  return localizedTree(tree, { ...labels, ...extra });
+}
+function sectionLabelsFile(labels: Record<string, string>) {
+  return {
+    schemaVersion: 1,
+    updatedAt: today,
+    sections: Object.fromEntries(Object.entries(labels).map(([id, title]) => [id, { en: title, uz: title, ru: title }])),
+  };
+}
+function buildSectionFile(tree: Tree, sectionId: string, labels: Record<string, string>): Promise<PublishFile> {
+  return fileFromText("content/sections.json", `${JSON.stringify(sectionLabelsFile(labels), null, 2)}\n`);
 }
 function updateTreeNode(nodes: TreeNode[], nodeId: string, patch: Partial<TreeNode>): TreeNode[] {
   return nodes.map((node) => node.id === nodeId ? { ...node, ...patch } : node.children ? { ...node, children: updateTreeNode(node.children, nodeId, patch) } : node);
