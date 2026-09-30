@@ -39,5 +39,11 @@ export async function POST(request: Request) {
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Publish failed." }, { status: 500 }); }
 }
 
-function safePath(path: string) { return Boolean(path) && !path.startsWith("/") && !path.includes("..") && !path.includes("\\"); }
+function safePath(path: string) {
+  return Boolean(path) &&
+    (path.startsWith("content/") || path.startsWith("public/")) &&
+    !path.startsWith("/") &&
+    !path.includes("..") &&
+    !path.includes("\\");
+}
 function githubPath(path: string) { return path.split("/").map(encodeURIComponent).join("/"); }
