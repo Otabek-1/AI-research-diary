@@ -52,7 +52,7 @@ type EditableBlock =
   | { type: "divider"; text: string }
   | ImageBlock;
 const today = new Date().toISOString().slice(0, 10);
-const visibleStatuses: Document["status"][] = ["published", "in-progress"];
+const visibleStatuses: Document["status"][] = ["published"];
 type PublishFile = { path: string; content: string; encoding: "utf8" | "base64" };
 const starter: Document = {
   schemaVersion: 1,
@@ -93,6 +93,7 @@ export default function PrivateEditor() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
   const [showSeo, setShowSeo] = useState(false);
+  const [showPresentation, setShowPresentation] = useState(false);
   const [activeBlock, setActiveBlock] = useState<number | null>(null);
   const [leftWidth, setLeftWidth] = useState(255);
   const [rightWidth, setRightWidth] = useState(250);
@@ -215,6 +216,13 @@ export default function PrivateEditor() {
       ...new Set([...current, ...moved].filter((path) => path !== `content/locales/${locale}/${patch.slug}.json`)),
     ]);
   }
+  function updatePresentation(patch: NonNullable<Document["presentation"]>) {
+    setDocument((current) => ({
+      ...current,
+      presentation: { ...current.presentation, ...patch },
+      updatedAt: today,
+    }));
+  }
   function updateDocumentTitle(title: string) {
     const fresh = !document.slug || document.slug === "new-research-note" || /^new-research-\d+$/.test(document.slug);
     updateDocument({
@@ -233,7 +241,6 @@ export default function PrivateEditor() {
   function renameDocument(documentId: string, title: string, sectionId: string) {
     const clean = title.trim();
     if (!clean) return;
-    setSectionLabels((current) => ({ ...current, [documentId]: clean }));
     setDocuments((current) => current.map((item) => (item.id === documentId ? { ...item, title: clean } : item)));
     if (documentId === selectedId) updateDocumentTitle(clean);
     uploadSoon(`Rename research to “${clean}”`, async () => {
@@ -270,6 +277,8 @@ export default function PrivateEditor() {
             ? { type, language: "text", text: "" }
             : type === "quote"
               ? { type, text: "A thought worth keeping." }
+          : type === "markdown"
+            ? { type, text: "Write **Markdown** and $inline\\ math$ here." }
               : type === "divider"
                 ? { type, text: "" }
                 : type === "image"
@@ -336,8 +345,7 @@ export default function PrivateEditor() {
       slug,
       title,
       section: sectionId,
-      status: "published",
-      publishedAt: today,
+      status: "draft",
       createdAt: today,
       updatedAt: today,
       seo: { title, description: "" },
@@ -345,7 +353,6 @@ export default function PrivateEditor() {
     };
     setSelectedId(id);
     setDocument(nextDocument);
-    setSectionLabels((current) => ({ ...current, [id]: title }));
     setDocuments((current) => [...current, nextDocument]);
     window.localStorage.setItem(`field-notes-draft-${locale}-${id}`, JSON.stringify(nextDocument));
     setTree((current) => ({ ...current, roots: addDocumentToTree(current.roots, sectionId, id) }));
@@ -403,7 +410,7 @@ export default function PrivateEditor() {
       const safeName = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, "-");
       updateBlock(index, {
         src: String(reader.result),
-        assetPath: `public/media/images/${document.section}/${document.slug}/${safeName}`,
+        assetPath: `public/images/${document.slug}/${safeName}`,
       });
       setMessage("Image added; it will be included in ZIP export");
     };
@@ -444,7 +451,7 @@ export default function PrivateEditor() {
         "content/tree.json",
         `${JSON.stringify({ ...tree, roots: addDocumentToTree(tree.roots, document.section, document.id) }, null, 2)}\n`,
       );
-      zip.file("content/sections.json", `${JSON.stringify(sectionLabelsFile(sectionLabels), null, 2)}\n`);
+      zip.file("content/sections.json", `${JSON.stringify(sectionLabelsFile(sectionLabels, tree), null, 2)}\n`);
       media.forEach((asset) => zip.file(asset.path, asset.base64, { base64: true }));
       zip.file(
         "README.txt",
@@ -463,9 +470,8 @@ export default function PrivateEditor() {
     const files = new Map<string, PublishFile>();
     const errors: string[] = [];
     for (const file of pendingFiles) files.set(file.path, file);
-    const visibleTree = localizedTree(tree, sectionLabels);
-    files.set("content/tree.json", utf8File("content/tree.json", visibleTree));
-    files.set("content/sections.json", utf8File("content/sections.json", sectionLabelsFile(sectionLabels)));
+    files.set("content/tree.json", utf8File("content/tree.json", tree));
+    files.set("content/sections.json", utf8File("content/sections.json", sectionLabelsFile(sectionLabels, tree)));
     if (document.id !== starter.id) {
       errors.push(...validate());
       if (!findTreeNode(tree.roots, document.section))
@@ -501,7 +507,6 @@ export default function PrivateEditor() {
         if (!parsed.id || !parsed.title || !Array.isArray(parsed.content))
           throw new Error("This document is missing required fields.");
         setImported((current) => [...current.filter((item) => item.id !== parsed.id), parsed]);
-        setSectionLabels((current) => ({ ...current, [parsed.id]: current[parsed.id] ?? parsed.title }));
         setSelectedId(parsed.id);
         setDocument(parsed);
         setMessage("Document imported. Pick a section in Metadata, then Publish to GitHub.");
@@ -700,6 +705,9 @@ export default function PrivateEditor() {
                   <button onClick={() => addBlock("quote")}>
                     <Quote size={15} /> Quote
                   </button>
+                  <button onClick={() => addBlock("markdown")}>
+                    <ListPlus size={15} /> Markdown + math
+                  </button>
                   <button onClick={() => addBlock("callout")}>
                     <Sparkles size={15} /> Callout
                   </button>
@@ -856,6 +864,77 @@ export default function PrivateEditor() {
                     field-notes.local/{locale}/research/{document.slug}
                   </small>
                 </div>
+              </div>
+            )}
+          </div>
+          <div className="right-panel-section">
+            <button
+              className="panel-toggle"
+              onClick={() => setShowPresentation((open) => !open)}
+            >
+              <span>Page presentation</span>
+              {showPresentation ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+            </button>
+            {showPresentation && (
+              <div className="metadata-fields">
+                <label>
+                  Background color
+                  <input
+                    value={document.presentation?.backgroundColor ?? ""}
+                    onChange={(event) => updatePresentation({ backgroundColor: event.target.value || undefined })}
+                    placeholder="#111513"
+                  />
+                </label>
+                <label>
+                  Background image
+                  <input
+                    value={document.presentation?.backgroundImage ?? ""}
+                    onChange={(event) => {
+                      const reference = normalizeImageReference(event.target.value);
+                      updatePresentation({ backgroundImage: reference.src || undefined });
+                    }}
+                    placeholder="pic.png or public/images/pic.png"
+                  />
+                  <small className="field-hint">Place the file under public/images (or public/media).</small>
+                </label>
+                <label>
+                  Text color
+                  <input
+                    value={document.presentation?.textColor ?? ""}
+                    onChange={(event) => updatePresentation({ textColor: event.target.value || undefined })}
+                    placeholder="#e9e7df"
+                  />
+                </label>
+                <label>
+                  Accent color
+                  <input
+                    value={document.presentation?.accentColor ?? ""}
+                    onChange={(event) => updatePresentation({ accentColor: event.target.value || undefined })}
+                    placeholder="#c7ed6b"
+                  />
+                </label>
+                <label>
+                  Content width (px)
+                  <input
+                    type="number"
+                    min="520"
+                    max="1100"
+                    value={document.presentation?.contentWidth ?? ""}
+                    onChange={(event) => updatePresentation({ contentWidth: event.target.value ? Number(event.target.value) : undefined })}
+                  />
+                </label>
+                <label>
+                  Font scale
+                  <input
+                    type="number"
+                    min="0.85"
+                    max="1.35"
+                    step="0.05"
+                    value={document.presentation?.fontScale ?? ""}
+                    onChange={(event) => updatePresentation({ fontScale: event.target.value ? Number(event.target.value) : undefined })}
+                    placeholder="1"
+                  />
+                </label>
               </div>
             )}
           </div>
@@ -1089,6 +1168,14 @@ function BlockEditor({
             onChange={(event) => onUpdate(index, { text: event.target.value })}
           />
         </div>
+      ) : block.type === "markdown" ? (
+        <textarea
+          className="paragraph-editor markdown-editor"
+          value={block.text}
+          onFocus={onFocus}
+          onChange={(event) => onUpdate(index, { text: event.target.value })}
+          placeholder="Markdown, GFM tables, and LaTeX: $x^2$ or $$E = mc^2$$"
+        />
       ) : block.type === "image" ? (
         <div className="image-editor">
           <label className="image-upload">
@@ -1105,6 +1192,14 @@ function BlockEditor({
           {block.src && (
             <Image src={block.src} alt={block.alt} width={760} height={260} unoptimized className="uploaded-image" />
           )}
+          <input
+            value={block.assetPath ?? block.src}
+            onChange={(event) => {
+              const reference = normalizeImageReference(event.target.value);
+              onUpdate(index, { src: reference.src, assetPath: reference.assetPath });
+            }}
+            placeholder="Image path, e.g. pic.png or public/images/pic.png"
+          />
           <input
             value={block.alt}
             onChange={(event) => onUpdate(index, { alt: event.target.value })}
@@ -1171,6 +1266,17 @@ function serializeDocument(document: Document) {
     file: (path: string) => utf8File(path, serialized),
   };
 }
+function normalizeImageReference(value: string) {
+  const clean = value.trim().replace(/^\/+/, "").replace(/^public\//, "");
+  if (!clean) return { src: "", assetPath: undefined };
+  const relative = clean.startsWith("images/") || clean.startsWith("media/")
+    ? clean
+    : `images/${clean}`;
+  return {
+    src: relative ? `/${relative}` : "",
+    assetPath: relative ? `public/${relative}` : undefined,
+  };
+}
 function utf8File(path: string, value: unknown): PublishFile {
   return { path, content: `${JSON.stringify(value, null, 2)}\n`, encoding: "utf8" };
 }
@@ -1234,15 +1340,20 @@ function localizedTree(tree: Tree, labels: Record<string, string>): Tree {
 function getLocaleTree(tree: Tree, labels: Record<string, string>, extra: Record<string, string>): Tree {
   return localizedTree(tree, { ...labels, ...extra });
 }
-function sectionLabelsFile(labels: Record<string, string>) {
+function sectionLabelsFile(labels: Record<string, string>, tree: Tree) {
+  const sectionIds = new Set(collectTreeNodes(tree.roots).map((node) => node.id));
   return {
     schemaVersion: 1,
     updatedAt: today,
-    sections: Object.fromEntries(Object.entries(labels).map(([id, title]) => [id, { en: title, uz: title, ru: title }])),
+    sections: Object.fromEntries(
+      Object.entries(labels)
+        .filter(([id]) => sectionIds.has(id))
+        .map(([id, title]) => [id, { en: title, uz: title, ru: title }]),
+    ),
   };
 }
 function buildSectionFile(tree: Tree, sectionId: string, labels: Record<string, string>): Promise<PublishFile> {
-  return fileFromText("content/sections.json", `${JSON.stringify(sectionLabelsFile(labels), null, 2)}\n`);
+  return fileFromText("content/sections.json", `${JSON.stringify(sectionLabelsFile(labels, tree), null, 2)}\n`);
 }
 function updateTreeNode(nodes: TreeNode[], nodeId: string, patch: Partial<TreeNode>): TreeNode[] {
   return nodes.map((node) => node.id === nodeId ? { ...node, ...patch } : node.children ? { ...node, children: updateTreeNode(node.children, nodeId, patch) } : node);
@@ -1265,7 +1376,16 @@ function findTreePath(nodes: TreeNode[], nodeId: string, parents: string[] = [])
   return [];
 }
 function insertTreeChild(nodes: TreeNode[], parentId: string, child: TreeNode): TreeNode[] { return nodes.map((node) => node.id === parentId ? { ...node, children: [...(node.children ?? []), child] } : node.children ? { ...node, children: insertTreeChild(node.children, parentId, child) } : node); }
-function addDocumentToTree(nodes: TreeNode[], sectionId: string, documentId: string): TreeNode[] { return nodes.map((node) => node.id === sectionId ? { ...node, documentIds: [...(node.documentIds ?? []), documentId] } : node.children ? { ...node, children: addDocumentToTree(node.children, sectionId, documentId) } : node); }
+function addDocumentToTree(nodes: TreeNode[], sectionId: string, documentId: string): TreeNode[] {
+  const withoutDocument = removeDocumentFromTree(nodes, documentId);
+  return withoutDocument.map((node) =>
+    node.id === sectionId
+      ? { ...node, documentIds: [...(node.documentIds ?? []), documentId] }
+      : node.children
+        ? { ...node, children: addDocumentToTree(node.children, sectionId, documentId) }
+        : node,
+  );
+}
 function readLocalDraft(locale: Locale, id: string): Document | undefined {
   try {
     const saved = window.localStorage.getItem(`field-notes-draft-${locale}-${id}`);
