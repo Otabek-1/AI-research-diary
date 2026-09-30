@@ -4,17 +4,25 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "predev": "node scripts/generate-content-index.mjs",
     "build": "next build",
+    "prebuild": "node scripts/generate-content-index.mjs",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "jszip": "^3.10.2",
+    "katex": "^0.18.9",
     "lucide-react": "^1.47.0",
-    "next": "16.3.5",
+    "next": "^16.3.6",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.16.0",
