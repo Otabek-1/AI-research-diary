@@ -131,7 +131,12 @@ export default function PrivateEditor() {
     if (!saved) return;
     const timer = window.setTimeout(() => {
       try {
-        setDocument(JSON.parse(saved));
+        const restored = JSON.parse(saved) as Document;
+        if (restored.slug === "where-it-begins" || restored.title === "Where it begins") {
+          window.localStorage.removeItem(`field-notes-draft-${locale}-${selectedId}`);
+          return;
+        }
+        setDocument(restored);
         setMessage("Restored local draft");
       } catch {
         setMessage("Saved locally");

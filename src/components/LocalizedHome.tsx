@@ -33,14 +33,26 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
         const decode = (content: string) =>
           JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(content), (char) => char.charCodeAt(0))));
         const files = result.files ?? [];
-        const documents = files
-          .filter((file) => file.path.startsWith("content/locales/") && file.path.endsWith(".json"))
-          .map((file) => decode(file.content) as Document);
         const treeFile = files.find((file) => file.path === "content/tree.json");
         const sectionsFile = files.find((file) => file.path === "content/sections.json");
+        const driveTree = treeFile ? decode(treeFile.content) as Tree : undefined;
+        const documentIds = new Set(flattenTreeDocumentIds(driveTree?.roots ?? []));
+        const localized = new Map<string, Document>();
+        const fallback = new Map<string, Document>();
+        for (const file of files) {
+          const match = file.path.match(/^content\/locales\/(en|uz|ru)\/.+\.json$/);
+          if (!match) continue;
+          const document = decode(file.content) as Document;
+          if (document.status !== "published" || !documentIds.has(document.id)) continue;
+          if (match[1] === locale) localized.set(document.id, document);
+          if (match[1] === "en") fallback.set(document.id, document);
+        }
+        const documents = [...documentIds]
+          .map((id) => localized.get(id) ?? fallback.get(id))
+          .filter((document): document is Document => Boolean(document));
         if (cancelled) return;
         setDriveDocuments(documents);
-        if (treeFile) setDriveTree(decode(treeFile.content) as Tree);
+        if (driveTree) setDriveTree(driveTree);
         if (sectionsFile) {
           const sections = (decode(sectionsFile.content) as { sections?: Record<string, Partial<Record<Locale, string>>> }).sections ?? {};
           setDriveLabels(Object.fromEntries(Object.entries(sections).map(([id, names]) => [id, names[locale] ?? names.en ?? id])));
@@ -277,4 +289,11 @@ function localizeDriveTree(nodes: TreeNode[], labels: Record<string, string>): T
     title: labels[node.id] ?? node.title,
     children: node.children ? localizeDriveTree(node.children, labels) : node.children,
   }));
+}
+
+function flattenTreeDocumentIds(nodes: TreeNode[]): string[] {
+  return nodes.flatMap((node) => [
+    ...(node.documentIds ?? []),
+    ...(node.children ? flattenTreeDocumentIds(node.children) : []),
+  ]);
 }
