@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-10",
+  "title": {
+    "en": "Research Expedition: The AI Treasure Map",
+    "uz": "Tadqiqot ekspeditsiyasi: AI xazina xaritasi",
+    "ru": "Исследовательская экспедиция: Карта сокровищ ИИ"
+  },
+  "subtitle": {
+    "en": "A nautical voyage across artificial intelligence frontiers — from the foundational bedrock to the autonomous citadel.",
+    "uz": "Sun'iy intellekt ufqlari bo'ylab dengiz sayohati — tamal toshlaridan to afsonaviy mustaqil agentgacha.",
+    "ru": "Морское путешествие по горизонтам искусственного интеллекта — от математических основ до автономной цитадели."
+  },
+  "finalProject": {
+    "id": "final-treasure",
+    "title": {
+      "en": "Autonomous Research Agent (Final Treasure)",
+      "uz": "Mustaqil Tadqiqot Agenti (Yakuniy Xazina)",
+      "ru": "Автономный исследовательский агент (Главное Сокровище)"
+    },
+    "description": {
+      "en": "The ultimate prize: a self-directed research assistant with hypothesis generation, code synthesis, and verification loops.",
+      "uz": "Eng oliy xazina: gipotezalarni ilgari suruvchi, kod sintez qiluvchi va natijalarni tekshiruvchi avtonom agent.",
+      "ru": "Главный трофей: автономный исследовательский ассистент с генерацией гипотез, синтезом кода и циклами верификации."
+    },
+    "status": "upcoming",
+    "reward": "The Crown of Discovery: Autonomous Intelligence",
+    "coordinates": {
+      "x": 92,
+      "y": 42
+    }
+  },
+  "destinations": [
+    {
+      "id": "isle-foundations",
+      "order": 1,
+      "title": {
+        "en": "Isle of Foundations",
+        "uz": "Asoslar oroli",
+        "ru": "Остров Основ"
+      },
+      "description": {
+        "en": "Mathematical bedrock: linear algebra, multivariable calculus, and probability.",
+        "uz": "Matematik tamal toshlar: chiziqli algebra, ko'p o'zgaruvchili analiz va ehtimollar nazariyasi.",
+        "ru": "Математический фундамент: линейная алгебра, анализ и теория вероятностей."
+      },
+      "status": "completed",
+      "coordinates": {
+        "x": 14,
+        "y": 68
+      },
+      "treasures": [
+        {
+          "id": "t-1",
+          "title": "Matrix Decompositions & Eigenvalues",
+          "type": "gem",
+          "completed": true
+        },
+        {
+          "id": "t-2",
+          "title": "Gradient Descent & Optimization Compass",
+          "type": "scroll",
+          "completed": true
+        },
+        {
+          "id": "t-3",
+          "title": "Information Theory & Entropy Relic",
+          "type": "artifact",
+          "completed": true
+        }
+      ]
+    },
+    {
+      "id": "archipelago-deep-learning",
+      "order": 2,
+      "title": {
+        "en": "Deep Learning Archipelago",
+        "uz": "Chuqur o'rganish arxipelagi",
+        "ru": "Архипелаг Глубокого Обучения"
+      },
+      "description": {
+        "en": "Backpropagation dynamics, representation learning, and neural architectures.",
+        "uz": "Orqaga tarqalish dinamikasi, reprezentatsiyalarni o'rganish va neyron arxitekturalar.",
+        "ru": "Динамика обратного распространения, обучение представлений и архитектуры сетей."
+      },
+      "status": "completed",
+      "coordinates": {
+        "x": 32,
+        "y": 32
+      },
+      "treasures": [
+        {
+          "id": "t-4",
+          "title": "Universal Approximation Theorem",
+          "type": "gem",
+          "completed": true
+        },
+        {
+          "id": "t-5",
+          "title": "Loss Surface Geometry & Regularization",
+          "type": "scroll",
+          "completed": true
+        },
+        {
+          "id": "t-6",
+          "title": "Convolutional & Recurrent Inductive Biases",
+          "type": "artifact",
+          "completed": true
+        }
+      ]
+    },
+    {
+      "id": "cove-transformers",
+      "order": 3,
+      "title": {
+        "en": "Transformer Cove",
+        "uz": "Transformerlar ko'rfazi",
+        "ru": "Бухта Трансформеров"
+      },
+      "description": {
+        "en": "Scaled dot-product attention currents, rotary embeddings, and KV-cache secrets.",
+        "uz": "Scaled dot-product attention oqimlari, aylanma embeddinglar va KV-kesh sirlari.",
+        "ru": "Течения attention, поворотные эмбеддинги RoPE и секреты KV-кэша."
+      },
+      "status": "current",
+      "coordinates": {
+        "x": 52,
+        "y": 66
+      },
+      "treasures": [
+        {
+          "id": "t-7",
+          "title": "Multi-Head Attention Engine",
+          "type": "gem",
+          "completed": true
+        },
+        {
+          "id": "t-8",
+          "title": "Rotary Position Embeddings (RoPE)",
+          "type": "scroll",
+          "completed": false
+        },
+        {
+          "id": "t-9",
+          "title": "FlashAttention IO-Aware Speedup",
+          "type": "artifact",
+          "completed": false
+        }
+      ]
+    },
+    {
+      "id": "peaks-reasoning-alignment",
+      "order": 4,
+      "title": {
+        "en": "Reasoning & Alignment Peaks",
+        "uz": "Mulohaza va moslashtirish cho'qqilari",
+        "ru": "Пики Рассуждений и Выравнивания"
+      },
+      "description": {
+        "en": "Chain-of-thought exploration, RLHF/DPO steering, and test-time compute search.",
+        "uz": "Fikrlar zanjiri izlanishlari, RLHF/DPO yo'naltirishlari va test-time compute qidiruvi.",
+        "ru": "Цепочки рассуждений, выравнивание RLHF/DPO и вычисления при генерации."
+      },
+      "status": "upcoming",
+      "coordinates": {
+        "x": 72,
+        "y": 26
+      },
+      "treasures": [
+        {
+          "id": "t-10",
+          "title": "Direct Preference Optimization (DPO)",
+          "type": "gem",
+          "completed": false
+        },
+        {
+          "id": "t-11",
+          "title": "Monte Carlo Tree Search for Reasoning",
+          "type": "scroll",
+          "completed": false
+        },
+        {
+          "id": "t-12",
+          "title": "Self-Correction & Process Reward Models",
+          "type": "artifact",
+          "completed": false
+        }
+      ]
+    },
+    {
+      "id": "citadel-agents",
+      "order": 5,
+      "title": {
+        "en": "Autonomous Citadel",
+        "uz": "Mustaqil agentlar qo'rg'oni",
+        "ru": "Цитадель Автономных Агентов"
+      },
+      "description": {
+        "en": "Tool-use protocols, memory sandboxes, multi-agent orchestration, and autonomy.",
+        "uz": "Asboblar bilan ishlash protokollari, xotira, ko'p agentli hamkorlik va avtonomiya.",
+        "ru": "Использование инструментов, память, мультиагентная координация и автономия."
+      },
+      "status": "upcoming",
+      "coordinates": {
+        "x": 86,
+        "y": 70
+      },
+      "treasures": [
+        {
+          "id": "t-13",
+          "title": "Tool-Use & Execution Sandboxes",
+          "type": "artifact",
+          "completed": false
+        },
+        {
+          "id": "t-14",
+          "title": "Long-Term Memory & Reflection Chains",
+          "type": "gem",
+          "completed": false
+        },
+        {
+          "id": "t-15",
+          "title": "Multi-Agent Consensus Protocol",
+          "type": "scroll",
+          "completed": false
+        }
+      ]
+    }
+  ]
+}

@@ -24,6 +24,7 @@ import {
   Trash2,
   Upload,
   X,
+  Compass,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -38,6 +39,12 @@ import {
   Tree,
   TreeNode,
 } from "@/lib/content";
+import { AdminRoadmapManager } from "@/components/AdminRoadmapManager";
+import {
+  RoadmapData,
+  defaultRoadmap,
+  parseRoadmapFromFiles,
+} from "@/lib/roadmap";
 
 type ImageBlock = {
   type: "image";
@@ -94,6 +101,9 @@ export default function PrivateEditor() {
   const [showMetadata, setShowMetadata] = useState(false);
   const [showSeo, setShowSeo] = useState(false);
   const [showPresentation, setShowPresentation] = useState(false);
+  const [showRoadmapModal, setShowRoadmapModal] = useState(false);
+  const [roadmap, setRoadmap] = useState<RoadmapData>(defaultRoadmap);
+  const [isSavingRoadmap, setIsSavingRoadmap] = useState(false);
   const [activeBlock, setActiveBlock] = useState<number | null>(null);
   const [leftWidth, setLeftWidth] = useState(255);
   const [rightWidth, setRightWidth] = useState(250);
@@ -172,6 +182,8 @@ export default function PrivateEditor() {
           const data = decoded(sectionsFile) as { sections?: Record<string, Partial<Record<Locale, string>>> };
           setSectionLabels(Object.fromEntries(Object.entries(data.sections ?? {}).map(([id, names]) => [id, names.en ?? names.uz ?? names.ru ?? id])));
         }
+        const driveRoadmap = parseRoadmapFromFiles(result.files ?? []);
+        if (driveRoadmap) setRoadmap(driveRoadmap);
       } catch (error) {
         if (!cancelled) setMessage(error instanceof Error ? error.message : "Google Drive content could not be loaded.");
       }
@@ -188,11 +200,13 @@ export default function PrivateEditor() {
   useEffect(() => {
     const savedTree = window.localStorage.getItem("field-notes-tree-shared");
     const savedLabels = window.localStorage.getItem("field-notes-section-labels");
+    const savedRoadmap = window.localStorage.getItem("field-notes-roadmap-shared");
     const savedPending = window.localStorage.getItem("field-notes-pending-files");
     const savedDeletes = window.localStorage.getItem(`field-notes-deletes-${locale}`);
     const timer = window.setTimeout(() => {
       if (savedTree) { try { setTree(JSON.parse(savedTree)); } catch { /* Ignore an invalid local tree draft. */ } }
       if (savedLabels) { try { setSectionLabels(JSON.parse(savedLabels)); } catch { /* Ignore invalid section names. */ } }
+      if (savedRoadmap) { try { setRoadmap(JSON.parse(savedRoadmap)); } catch { /* Ignore invalid roadmap draft. */ } }
       if (savedPending) { try { setPendingFiles(JSON.parse(savedPending)); } catch { /* Ignore an invalid publish queue. */ } }
       if (savedDeletes) { try { setDeletedPaths(JSON.parse(savedDeletes)); } catch { /* Ignore an invalid local delete draft. */ } }
     }, 0);
@@ -200,6 +214,7 @@ export default function PrivateEditor() {
   }, [locale]);
   useEffect(() => { window.localStorage.setItem("field-notes-tree-shared", JSON.stringify(tree)); }, [tree]);
   useEffect(() => { window.localStorage.setItem("field-notes-section-labels", JSON.stringify(sectionLabels)); }, [sectionLabels]);
+  useEffect(() => { window.localStorage.setItem("field-notes-roadmap-shared", JSON.stringify(roadmap)); }, [roadmap]);
   useEffect(() => { window.localStorage.setItem(`field-notes-deletes-${locale}`, JSON.stringify(deletedPaths)); }, [locale, deletedPaths]);
   useEffect(() => { window.localStorage.setItem("field-notes-pending-files", JSON.stringify(pendingFiles)); }, [pendingFiles]);
   useEffect(() => { const saved = window.localStorage.getItem("field-notes-workspace-widths"); if (!saved) return; const timer = window.setTimeout(() => { try { const widths = JSON.parse(saved) as { left?: number; right?: number }; if (widths.left) setLeftWidth(widths.left); if (widths.right) setRightWidth(widths.right); } catch { /* Ignore invalid layout preferences. */ } }, 0); return () => window.clearTimeout(timer); }, []);
@@ -511,6 +526,7 @@ export default function PrivateEditor() {
     for (const file of pendingFiles) files.set(file.path, file);
     files.set("content/tree.json", utf8File("content/tree.json", tree));
     files.set("content/sections.json", utf8File("content/sections.json", sectionLabelsFile(sectionLabels, tree)));
+    files.set("content/roadmap.json", utf8File("content/roadmap.json", roadmap));
     if (document.id !== starter.id) {
       errors.push(...validate());
       if (!findTreeNode(tree.roots, document.section))
@@ -522,6 +538,31 @@ export default function PrivateEditor() {
       }
     }
     return { files: [...files.values()], errors };
+  }
+  async function saveRoadmapToGoogleDrive() {
+    setIsSavingRoadmap(true);
+    setMessage("Saving Treasure Map Roadmap to Google Drive...");
+    try {
+      const response = await fetch("/api/admin/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: [utf8File("content/roadmap.json", roadmap)],
+          deletes: [],
+          message: `Update treasure roadmap (${locale})`,
+        }),
+      });
+      const result = (await response.json()) as { ok?: boolean; error?: string };
+      if (response.ok && result.ok) {
+        setMessage("Treasure Map roadmap progress saved to Google Drive!");
+      } else {
+        setMessage(result.error || "Google Drive roadmap save failed.");
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Roadmap save failed");
+    } finally {
+      setIsSavingRoadmap(false);
+    }
   }
   async function saveToGoogleDrive() {
     const { files, errors } = collectPublishFiles();
@@ -573,6 +614,13 @@ export default function PrivateEditor() {
           />
         </div>
         <div className="workspace-actions">
+          <button
+            className="workspace-button"
+            onClick={() => setShowRoadmapModal(true)}
+            title="Treasure Map Roadmap boshqaruvi"
+          >
+            <Compass size={15} /> Treasure Roadmap
+          </button>
           <button
             className="workspace-button"
             onClick={() => setShowMetadata(true)}
@@ -1020,6 +1068,16 @@ export default function PrivateEditor() {
           </div>
         </aside>
       </div>
+      {showRoadmapModal && (
+        <AdminRoadmapManager
+          roadmap={roadmap}
+          onChange={setRoadmap}
+          onSaveToDrive={saveRoadmapToGoogleDrive}
+          onClose={() => setShowRoadmapModal(false)}
+          locale={locale}
+          isSaving={isSavingRoadmap}
+        />
+      )}
     </main>
   );
 }

@@ -15,12 +15,19 @@ import {
   TreeNode,
 } from "@/lib/content";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { TreasureHeroSection } from "@/components/TreasureHeroSection";
+import {
+  RoadmapData,
+  defaultRoadmap,
+  parseRoadmapFromFiles,
+} from "@/lib/roadmap";
 
 export default function LocalizedHome({ locale }: { locale: Locale }) {
   const ui = getUi(locale).ui;
   const [driveDocuments, setDriveDocuments] = useState<Document[] | null>(null);
   const [driveTree, setDriveTree] = useState<Tree | null>(null);
   const [driveLabels, setDriveLabels] = useState<Record<string, string> | null>(null);
+  const [driveRoadmap, setDriveRoadmap] = useState<RoadmapData | null>(null);
   useEffect(() => {
     let cancelled = false;
     async function loadDriveContent() {
@@ -50,6 +57,8 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
         const documents = [...documentIds]
           .map((id) => localized.get(id) ?? fallback.get(id))
           .filter((document): document is Document => Boolean(document));
+        const liveRoadmap = parseRoadmapFromFiles(files);
+        if (liveRoadmap) setDriveRoadmap(liveRoadmap);
         if (cancelled) return;
         setDriveDocuments(documents);
         if (driveTree) setDriveTree(driveTree);
@@ -68,6 +77,7 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
   const knowledgeTree = driveTree
     ? { ...driveTree, roots: localizeDriveTree(driveTree.roots, driveLabels ?? {}) }
     : getTree(locale);
+  const activeRoadmap = driveRoadmap ?? defaultRoadmap;
   const firstDocument = documents[0];
   const [query, setQuery] = useState("");
   const normalized = query.trim().toLowerCase();
@@ -86,6 +96,9 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
           FIELD / NOTES<span>01</span>
         </Link>
         <nav className="public-nav" aria-label="Primary navigation">
+          <Link href={`/${locale}/treasure-map`}>
+            {ui.treasureMap ?? "Treasure Map"}
+          </Link>
           <a href="#archive">{ui.archive}</a>
           <a href="#map">{ui.map}</a>
           <a href="#about">{ui.about}</a>
@@ -99,6 +112,9 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
           <Search size={17} />
         </button>
       </header>
+
+      {/* Main page Treasure Map Roadmap Hero Section (w-full h-50vh) */}
+      <TreasureHeroSection locale={locale} roadmap={activeRoadmap} />
 
       <section className="hero-grid">
         <div className="hero-copy">

@@ -35,6 +35,16 @@
     "language": "Язык",
     "translationStatus": "Статус перевода",
     "translated": "Переведено",
-    "missing": "Показан английский"
+    "missing": "Показан английский",
+    "treasureMap": "Карта сокровищ",
+    "expedition": "Исследовательская экспедиция",
+    "viewTreasureMap": "Открыть карту сокровищ",
+    "finalTreasure": "Главное сокровище: Финальный проект",
+    "shipHere": "Корабль бросил якорь здесь",
+    "destinationDone": "Сокровище получено",
+    "destinationLocked": "Скрыто в тумане",
+    "treasures": "Сокровища",
+    "destinations": "Пункты экспедиции",
+    "progress": "Прогресс экспедиции"
   }
 }
