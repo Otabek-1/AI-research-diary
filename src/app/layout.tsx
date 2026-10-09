@@ -3,7 +3,7 @@ import "./globals.css";
 import "katex/dist/katex.min.css";
 
 export const metadata: Metadata = {
-  title: "Field / Notes | A personal research laboratory",
+  title: "AI Field Notes",
   description: "A living map of research, experiments, and connected ideas.",
 };
 

@@ -11,7 +11,30 @@ import { getDriveContent, getDriveDocument, getDriveDocuments, getDriveSectionLa
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> { const { locale: rawLocale, slug } = await params; const locale = getLocale(rawLocale) as Locale; const content = await getDriveContent(); const document = getDriveDocument(content, slug, locale); if (!document) return {}; return { title: document.seo.title, description: document.seo.description }; }
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
+  const { locale: rawLocale, slug } = await params;
+  const locale = getLocale(rawLocale) as Locale;
+  const content = await getDriveContent();
+  const document = getDriveDocument(content, slug, locale);
+  if (!document) return {};
+  const title = document.seo.title || document.title;
+  const description = document.seo.description || document.description;
+  const url = `${siteOrigin()}/${locale}/research/${encodeURIComponent(document.slug)}`;
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      type: "article",
+      locale,
+      siteName: "AI Field Notes",
+    },
+    twitter: { card: "summary", title, description },
+  };
+}
 
 export default async function ResearchPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale: rawLocale, slug } = await params;
@@ -43,4 +66,11 @@ function assetUrl(value?: string) {
   const clean = value.trim().replace(/^public\//, "").replace(/^\/+/, "");
   if (!clean || clean.includes("..") || !/^[a-zA-Z0-9/_\-.]+$/.test(clean)) return undefined;
   return `/${clean}`;
+}
+
+function siteOrigin() {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim() || process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "").startsWith("http") ? configured.replace(/\/+$/, "") : `https://${configured.replace(/\/+$/, "")}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
 }
