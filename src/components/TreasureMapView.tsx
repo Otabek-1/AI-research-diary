@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useId } from "react";
+import Link from "next/link";
 import {
   Anchor,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   Crown,
   MapPin,
   ChevronDown,
+  ArrowUpRight,
 } from "lucide-react";
 import { Locale } from "@/lib/content";
 import {
@@ -20,6 +22,7 @@ import {
   TreasureItem,
   computeRoadmapProgress,
   getRoadmapText,
+  resolveTreasureLink,
 } from "@/lib/roadmap";
 
 export function TreasureMapView({
@@ -429,25 +432,44 @@ export function TreasureMapView({
                     >
                       ISLAND TREASURES ({dest.treasures.filter((t) => t.completed).length}/{dest.treasures.length})
                     </text>
-                    {dest.treasures.slice(0, 3).map((tr, trIdx) => (
-                      <g key={tr.id} transform={`translate(14, ${44 + trIdx * 19})`}>
-                        <circle
-                          r="3"
-                          cx="3"
-                          cy="-3"
-                          fill={tr.completed ? "#c7ed6b" : "#505854"}
-                        />
-                        <text
-                          x="12"
-                          y="0"
-                          fill={tr.completed ? "#c7ed6b" : "#b0b3ae"}
-                          fontSize="10"
-                          fontFamily="DM Sans, sans-serif"
+                    {dest.treasures.slice(0, 3).map((tr, trIdx) => {
+                      const trLink = resolveTreasureLink(tr, locale);
+                      return (
+                        <g
+                          key={tr.id}
+                          transform={`translate(14, ${44 + trIdx * 19})`}
+                          className={trLink ? "cursor-pointer" : ""}
+                          onClick={(e) => {
+                            if (trLink) {
+                              e.stopPropagation();
+                              if (trLink.startsWith("http")) {
+                                window.open(trLink, "_blank");
+                              } else {
+                                window.location.href = trLink;
+                              }
+                            }
+                          }}
                         >
-                          {tr.title.length > 24 ? tr.title.slice(0, 22) + "…" : tr.title}
-                        </text>
-                      </g>
-                    ))}
+                          <circle
+                            r="3"
+                            cx="3"
+                            cy="-3"
+                            fill={tr.completed ? "#c7ed6b" : "#505854"}
+                          />
+                          <text
+                            x="12"
+                            y="0"
+                            fill={tr.completed ? "#c7ed6b" : "#b0b3ae"}
+                            fontSize="10"
+                            fontFamily="DM Sans, sans-serif"
+                            className={trLink ? "underline" : ""}
+                          >
+                            {tr.title.length > 22 ? tr.title.slice(0, 20) + "…" : tr.title}
+                            {trLink ? " ↗" : ""}
+                          </text>
+                        </g>
+                      );
+                    })}
                   </g>
                 </g>
               );
@@ -722,33 +744,82 @@ function TreasureCard({
       ? Key
       : Shield;
 
-  return (
-    <div className={`treasure-card ${treasure.completed ? "collected" : ""}`}>
+  const targetLink = resolveTreasureLink(treasure, locale);
+  const isExternal = Boolean(
+    targetLink && (targetLink.startsWith("http://") || targetLink.startsWith("https://")),
+  );
+
+  const cardInner = (
+    <div
+      className={`treasure-card ${treasure.completed ? "collected" : ""} ${
+        targetLink ? "hover:border-[#c7ed6b] transition-all cursor-pointer group" : ""
+      }`}
+    >
       <div className="treasure-card-left">
-        <div className="treasure-type-icon">
+        <div className="treasure-type-icon group-hover:bg-[#c7ed6b22]">
           <IconComponent size={16} />
         </div>
         <div className="treasure-card-info">
-          <h4>{treasure.title}</h4>
-          <span>
-            {treasure.completed
-              ? locale === "uz"
-                ? "Topilgan xazina"
-                : "Claimed"
-              : locale === "uz"
-              ? "Kutilayotgan mavzu"
-              : "In study"}
+          <h4 className="group-hover:text-[#c7ed6b] transition-colors">{treasure.title}</h4>
+          <span className="flex items-center gap-1.5">
+            {treasure.completed ? (
+              <>
+                <span className="text-acid">
+                  {locale === "uz" ? "Topilgan xazina" : "Claimed"}
+                </span>
+                {targetLink && (
+                  <span className="text-[10px] text-muted inline-flex items-center gap-0.5">
+                    • {locale === "uz" ? "Tadqiqotni o'qish" : "Read note"}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span>
+                {locale === "uz" ? "Kutilayotgan mavzu" : "In study"}
+              </span>
+            )}
           </span>
         </div>
       </div>
 
-      <div>
+      <div className="flex items-center gap-2">
+        {targetLink && (
+          <span
+            className="p-1 rounded bg-[#c7ed6b18] text-[#c7ed6b] group-hover:bg-[#c7ed6b] group-hover:text-[#111513] transition-colors inline-flex items-center gap-1 font-mono text-[11px] px-2"
+            title="Tadqiqot maqolasini ochish"
+          >
+            <span>{locale === "uz" ? "O'qish" : "Read"}</span>
+            <ArrowUpRight size={13} />
+          </span>
+        )}
         {treasure.completed ? (
-          <CheckCircle2 size={16} className="text-acid" />
+          <CheckCircle2 size={16} className="text-acid flex-shrink-0" />
         ) : (
-          <span className="w-2 h-2 rounded-full bg-[#404844] block" />
+          <span className="w-2 h-2 rounded-full bg-[#404844] block flex-shrink-0" />
         )}
       </div>
     </div>
   );
+
+  if (targetLink) {
+    if (isExternal) {
+      return (
+        <a
+          href={targetLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block no-underline"
+        >
+          {cardInner}
+        </a>
+      );
+    }
+    return (
+      <Link href={targetLink} className="block no-underline">
+        {cardInner}
+      </Link>
+    );
+  }
+
+  return cardInner;
 }

@@ -11,6 +11,7 @@ export type TreasureItem = {
   type?: TreasureType;
   completed: boolean;
   docSlug?: string;
+  linkUrl?: string;
 };
 
 export type RoadmapDestination = {
@@ -51,6 +52,23 @@ export function getRoadmapText(
   if (!value) return fallback;
   if (typeof value === "string") return value;
   return value[locale] ?? value.en ?? Object.values(value)[0] ?? fallback;
+}
+
+export function resolveTreasureLink(treasure: TreasureItem, locale: Locale): string | null {
+  if (treasure.linkUrl && treasure.linkUrl.trim()) {
+    const raw = treasure.linkUrl.trim();
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      return raw;
+    }
+    if (raw.startsWith("/")) {
+      return raw;
+    }
+    return `/${locale}/research/${raw}`;
+  }
+  if (treasure.docSlug && treasure.docSlug.trim()) {
+    return `/${locale}/research/${treasure.docSlug.trim()}`;
+  }
+  return null;
 }
 
 export function computeRoadmapProgress(roadmap: RoadmapData) {

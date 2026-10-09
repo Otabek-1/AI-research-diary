@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronUp,
   Upload,
+  Link2,
 } from "lucide-react";
 import { Locale } from "@/lib/content";
 import {
@@ -23,6 +24,7 @@ import {
   TreasureItem,
   DestinationStatus,
   getRoadmapText,
+  resolveTreasureLink,
 } from "@/lib/roadmap";
 
 export function AdminRoadmapManager({
@@ -45,6 +47,7 @@ export function AdminRoadmapManager({
     roadmap.destinations[0]?.id ?? null,
   );
   const [newTreasureTitle, setNewTreasureTitle] = useState("");
+  const [newTreasureLink, setNewTreasureLink] = useState("");
 
   function updateDestination(id: string, patch: Partial<RoadmapDestination>) {
     const nextDestinations = roadmap.destinations.map((d) => {
@@ -124,14 +127,30 @@ export function AdminRoadmapManager({
     const newTreasure: TreasureItem = {
       id: `t-${Date.now()}`,
       title: newTreasureTitle.trim(),
+      linkUrl: newTreasureLink.trim() || undefined,
       type: "gem",
-      completed: false,
+      completed: Boolean(newTreasureLink.trim()),
     };
 
     updateDestination(destinationId, {
       treasures: [...target.treasures, newTreasure],
     });
     setNewTreasureTitle("");
+    setNewTreasureLink("");
+  }
+
+  function updateTreasure(
+    destinationId: string,
+    treasureId: string,
+    patch: Partial<TreasureItem>,
+  ) {
+    const target = roadmap.destinations.find((d) => d.id === destinationId);
+    if (!target) return;
+
+    const nextTreasures = target.treasures.map((t) =>
+      t.id === treasureId ? { ...t, ...patch } : t,
+    );
+    updateDestination(destinationId, { treasures: nextTreasures });
   }
 
   function toggleTreasure(destinationId: string, treasureId: string) {
@@ -367,51 +386,88 @@ export function AdminRoadmapManager({
                             {dest.treasures.map((treasure) => (
                               <div
                                 key={treasure.id}
-                                className={`flex items-center justify-between gap-3 p-2.5 rounded border text-sm ${
+                                className={`flex flex-col gap-2 p-2.5 rounded border text-sm transition-all ${
                                   treasure.completed
                                     ? "bg-[#142017] border-[#29422f]"
                                     : "bg-[#141816] border-[#242c28]"
                                 }`}
                               >
-                                <div className="flex items-center gap-2 flex-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={treasure.completed}
-                                    onChange={() => toggleTreasure(dest.id, treasure.id)}
-                                    className="accent-[#c7ed6b] cursor-pointer w-4 h-4"
-                                    id={`t-chk-${treasure.id}`}
-                                  />
-                                  <label
-                                    htmlFor={`t-chk-${treasure.id}`}
-                                    className={`cursor-pointer ${
-                                      treasure.completed
-                                        ? "text-[#c7ed6b] font-medium"
-                                        : "text-[#e9e7df]"
-                                    }`}
-                                  >
-                                    {treasure.title}
-                                  </label>
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2 flex-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={treasure.completed}
+                                      onChange={() => toggleTreasure(dest.id, treasure.id)}
+                                      className="accent-[#c7ed6b] cursor-pointer w-4 h-4"
+                                      id={`t-chk-${treasure.id}`}
+                                    />
+                                    <input
+                                      type="text"
+                                      value={treasure.title}
+                                      onChange={(e) =>
+                                        updateTreasure(dest.id, treasure.id, {
+                                          title: e.target.value,
+                                        })
+                                      }
+                                      placeholder="Mavzu nomi..."
+                                      className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-[#c7ed6b] text-sm py-0.5 ${
+                                        treasure.completed
+                                          ? "text-[#c7ed6b] font-medium"
+                                          : "text-[#e9e7df]"
+                                      }`}
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-[10px] text-[#8e918d] uppercase">
+                                      {treasure.completed ? "Olingan" : "Kutilmoqda"}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeTreasure(dest.id, treasure.id)}
+                                      className="p-1 text-[#8e918d] hover:text-red-400"
+                                      title="O'chirish"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-[10px] text-[#8e918d] uppercase">
-                                    {treasure.completed ? "Olingan" : "Kutilmoqda"}
+                                {/* Research Content Link Input (Paste here!) */}
+                                <div className="flex items-center gap-2 pl-6 pt-1 border-t border-[#1a221d]">
+                                  <span className="font-mono text-[11px] text-[#8e918d] flex items-center gap-1 flex-shrink-0">
+                                    <Link2 size={12} className="text-[#c7ed6b]" />
+                                    Link / Slug:
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeTreasure(dest.id, treasure.id)}
-                                    className="p-1 text-[#8e918d] hover:text-red-400"
-                                    title="O'chirish"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
+                                  <input
+                                    type="text"
+                                    placeholder="Masalan: neural-networks yoki /uz/research/neural-networks"
+                                    value={treasure.linkUrl ?? treasure.docSlug ?? ""}
+                                    onChange={(e) =>
+                                      updateTreasure(dest.id, treasure.id, {
+                                        linkUrl: e.target.value,
+                                      })
+                                    }
+                                    className="flex-1 bg-[#101412] border border-[#232e26] text-[#c7ed6b] px-2.5 py-1 text-xs rounded outline-none focus:border-[#c7ed6b] font-mono"
+                                  />
+                                  {(treasure.linkUrl || treasure.docSlug) && (
+                                    <a
+                                      href={resolveTreasureLink(treasure, locale) ?? "#"}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="p-1 text-[#c7ed6b] hover:text-[#ddfa91]"
+                                      title="Havolani ochib tekshirish"
+                                    >
+                                      <ExternalLink size={13} />
+                                    </a>
+                                  )}
                                 </div>
                               </div>
                             ))}
                           </div>
 
                           {/* Add Treasure inline */}
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row gap-2 bg-[#121815] p-2 rounded border border-[#202c24]">
                             <input
                               type="text"
                               placeholder="Yangi xazina (mavzu) nomi..."
@@ -425,10 +481,23 @@ export function AdminRoadmapManager({
                               }}
                               className="flex-1 bg-[#161c19] border border-[#2b302e] text-[#e9e7df] px-3 py-1.5 text-xs rounded outline-none focus:border-[#c7ed6b]"
                             />
+                            <input
+                              type="text"
+                              placeholder="Research link (ixtiyoriy)..."
+                              value={newTreasureLink}
+                              onChange={(e) => setNewTreasureLink(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  addTreasureToDestination(dest.id);
+                                }
+                              }}
+                              className="flex-1 bg-[#161c19] border border-[#2b302e] text-[#c7ed6b] px-3 py-1.5 text-xs rounded outline-none focus:border-[#c7ed6b] font-mono"
+                            />
                             <button
                               type="button"
                               onClick={() => addTreasureToDestination(dest.id)}
-                              className="px-3 py-1.5 bg-[#202923] border border-[#2b302e] hover:border-[#c7ed6b] text-[#c7ed6b] font-mono text-xs rounded"
+                              className="px-4 py-1.5 bg-[#202923] border border-[#2b302e] hover:border-[#c7ed6b] text-[#c7ed6b] font-mono text-xs rounded font-bold"
                             >
                               + Qo&apos;shish
                             </button>

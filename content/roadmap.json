@@ -54,7 +54,8 @@
           "id": "t-1",
           "title": "Matrix Decompositions & Eigenvalues",
           "type": "gem",
-          "completed": true
+          "completed": true,
+          "linkUrl": "neural-networks"
         },
         {
           "id": "t-2",
