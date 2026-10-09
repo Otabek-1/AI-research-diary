@@ -90,33 +90,36 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
     : [];
 
   return (
-    <main className="site-shell">
-      <header className="topbar">
-        <Link className="wordmark" href={`/${locale}`}>
-          FIELD / NOTES<span>01</span>
-        </Link>
-        <nav className="public-nav" aria-label="Primary navigation">
-          <Link href={`/${locale}/treasure-map`}>
-            {ui.treasureMap ?? "Treasure Map"}
+    <div className="site-wrapper">
+      <div className="site-shell">
+        <header className="topbar">
+          <Link className="wordmark" href={`/${locale}`}>
+            FIELD / NOTES<span>01</span>
           </Link>
-          <a href="#archive">{ui.archive}</a>
-          <a href="#map">{ui.map}</a>
-          <a href="#about">{ui.about}</a>
-        </nav>
-        <LanguageSwitcher locale={locale} />
-        <button
-          className="icon-button"
-          aria-label={ui.search}
-          onClick={() => document.getElementById("search")?.focus()}
-        >
-          <Search size={17} />
-        </button>
-      </header>
+          <nav className="public-nav" aria-label="Primary navigation">
+            <Link href={`/${locale}/treasure-map`}>
+              {ui.treasureMap ?? "Treasure Map"}
+            </Link>
+            <a href="#archive">{ui.archive}</a>
+            <a href="#map">{ui.map}</a>
+            <a href="#about">{ui.about}</a>
+          </nav>
+          <LanguageSwitcher locale={locale} />
+          <button
+            className="icon-button"
+            aria-label={ui.search}
+            onClick={() => document.getElementById("search")?.focus()}
+          >
+            <Search size={17} />
+          </button>
+        </header>
+      </div>
 
-      {/* Main page Treasure Map Roadmap Hero Section (w-full h-50vh) */}
+      {/* Main page Treasure Map Roadmap Hero Section: FULL-WIDTH (containerdan tashqarida) */}
       <TreasureHeroSection locale={locale} roadmap={activeRoadmap} />
 
-      <section className="hero-grid">
+      <main className="site-shell">
+        <section className="hero-grid">
         <div className="hero-copy">
           <p className="eyebrow">
             <span className="pulse" /> Personal research laboratory / 2026
@@ -270,6 +273,7 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
         <span>{ui.archiveNote}</span>
       </footer>
     </main>
+    </div>
   );
 }
 

@@ -140,8 +140,9 @@ export function TreasureHeroSection({
       {/* Curtain bg: linear-gradient from transparent to black */}
       <div className="treasure-curtain-overlay" aria-hidden="true" />
 
-      {/* Bottom-left Content: span, h2 and link button */}
-      <div className="treasure-hero-content">
+      {/* Bottom-left Content inside full-width container */}
+      <div className="treasure-hero-content-wrap">
+        <div className="treasure-hero-content">
         <div className="treasure-hero-meta">
           <span className="treasure-eyebrow">
             <Compass size={14} className="treasure-icon-pulse" />
@@ -233,6 +234,7 @@ export function TreasureHeroSection({
           </div>
         </div>
       </div>
-    </section>
-  );
+    </div>
+  </section>
+);
 }

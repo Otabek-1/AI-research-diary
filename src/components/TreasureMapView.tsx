@@ -12,6 +12,7 @@ import {
   Key,
   Crown,
   MapPin,
+  ChevronDown,
 } from "lucide-react";
 import { Locale } from "@/lib/content";
 import {
@@ -40,52 +41,89 @@ export function TreasureMapView({
     ? null
     : sortedDestinations.find((d) => d.id === selectedDestinationId) ?? sortedDestinations[0];
 
-  // Helper to build smooth curved Bezier path between two coordinate points
-  function buildCurvePath(
-    p1: { x: number; y: number },
-    p2: { x: number; y: number },
-  ) {
-    const x1 = (p1.x / 100) * 1000;
-    const y1 = (p1.y / 100) * 580;
-    const x2 = (p2.x / 100) * 1000;
-    const y2 = (p2.y / 100) * 580;
+  // Vertical Serpentine Layout Calculations
+  // Every destination is spaced down vertically (y increases downward for scrolling)
+  // Odd orders go on the left, even orders go on the right (serpentine S-curve)
+  const START_Y = 220;
+  const STEP_Y = 380;
 
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    // Curved control points for natural maritime sailing arcs
-    const cx1 = x1 + dx * 0.45;
-    const cy1 = y1 - dy * 0.35 + (x1 % 2 === 0 ? -40 : 40);
-    const cx2 = x1 + dx * 0.75;
-    const cy2 = y2 + (y1 % 2 === 0 ? 30 : -30);
+  const destinationWaypoints = sortedDestinations.map((dest, index) => {
+    // Serpentine: left (x: 250) <-> right (x: 750)
+    const isLeft = dest.order % 2 === 1;
+    const x = isLeft ? 250 : 750;
+    const y = START_Y + index * STEP_Y;
+    return {
+      ...dest,
+      coord: { x, y },
+      isLeft,
+    };
+  });
 
-    return `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
-  }
+  // Final project is at the very bottom center
+  const finalCoord = {
+    x: 500,
+    y: START_Y + sortedDestinations.length * STEP_Y + 200,
+  };
+  const totalMapHeight = finalCoord.y + 260;
 
-  // All nodes in order including final project
+  // Build all sequential points for curved paths
   const allWaypoints = [
-    ...sortedDestinations.map((d) => ({
+    ...destinationWaypoints.map((d) => ({
       id: d.id,
-      coordinates: d.coordinates,
+      coord: d.coord,
       status: d.status,
       isFinal: false,
     })),
     {
       id: roadmap.finalProject.id,
-      coordinates: roadmap.finalProject.coordinates ?? { x: 92, y: 45 },
+      coord: finalCoord,
       status: roadmap.finalProject.status,
       isFinal: true,
     },
   ];
 
+  // Build vertical serpentine cubic Bezier curved path
+  function buildVerticalCurvePath(
+    p1: { x: number; y: number },
+    p2: { x: number; y: number },
+  ) {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+
+    // Cubic bezier with vertical bias for serpentine S-turns
+    const cx1 = p1.x + dx * 0.15;
+    const cy1 = p1.y + dy * 0.52;
+    const cx2 = p2.x - dx * 0.15;
+    const cy2 = p1.y + dy * 0.48;
+
+    return `M ${p1.x} ${p1.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${p2.x} ${p2.y}`;
+  }
+
   return (
     <div className="treasure-map-experience">
-      {/* Interactive Nautical Cartography Surface */}
-      <div className="interactive-map-container" role="region" aria-label="Interactive Treasure Map">
+      {/* Scroll indicator prompt */}
+      <div className="flex items-center justify-center gap-2 py-3 text-muted font-mono text-xs uppercase tracking-wider mb-2">
+        <span>
+          {locale === "uz"
+            ? "↓ Pastga scroll qilib sarguzasht marshrutini kuzating"
+            : locale === "ru"
+            ? "↓ Листайте вниз для просмотра маршрута экспедиции"
+            : "↓ Scroll down to voyage through the expedition"}
+        </span>
+        <ChevronDown size={14} className="animate-bounce" />
+      </div>
+
+      {/* Main Vertical Scrolling Maritime Map Canvas Container */}
+      <div
+        className="interactive-map-container"
+        role="region"
+        aria-label="Vertical Interactive Treasure Map"
+      >
         <div className="map-cartography-bg">
           {/* Subtle Grid overlay */}
           <div className="treasure-grid-overlay" />
 
-          {/* Compass Rose */}
+          {/* Top Compass Rose */}
           <div className="treasure-compass-rose">
             <div className="compass-ring" />
             <div className="compass-star" />
@@ -95,51 +133,78 @@ export function TreasureMapView({
             <span className="compass-dir dir-w">W</span>
           </div>
 
-          {/* Main SVG Map Canvas */}
+          {/* SVG Map Canvas with full dynamic vertical height */}
           <svg
             className="map-svg-surface"
-            viewBox="0 0 1000 580"
-            preserveAspectRatio="xMidYMid meet"
+            viewBox={`0 0 1000 ${totalMapHeight}`}
+            style={{ width: "100%", height: "auto" }}
           >
             <defs>
               <filter id={glowFilterId} x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feGaussianBlur stdDeviation="5" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
               <radialGradient id="nodeActiveGlow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#c7ed6b" stopOpacity="0.45" />
+                <stop offset="0%" stopColor="#c7ed6b" stopOpacity="0.4" />
                 <stop offset="100%" stopColor="#c7ed6b" stopOpacity="0" />
               </radialGradient>
               <radialGradient id="finalGoldGlow" cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stopColor="#e5a875" stopOpacity="0.5" />
                 <stop offset="100%" stopColor="#e5a875" stopOpacity="0" />
               </radialGradient>
+              <radialGradient id="reefGradient" cx="50%" cy="50%" r="50%">
+                <stop offset="60%" stopColor="#1a2820" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="#0b110e" stopOpacity="0" />
+              </radialGradient>
             </defs>
 
-            {/* CURVED DASHED PATHS BETWEEN DESTINATIONS */}
+            {/* Maritime Latitude / Longitude Depth Markings along map */}
+            {Array.from({ length: Math.floor(totalMapHeight / 300) }).map((_, i) => (
+              <g key={`coord-line-${i}`} opacity="0.3">
+                <line
+                  x1="40"
+                  y1={150 + i * 300}
+                  x2="960"
+                  y2={150 + i * 300}
+                  stroke="#2b3830"
+                  strokeWidth="0.8"
+                  strokeDasharray="4 8"
+                />
+                <text
+                  x="50"
+                  y={145 + i * 300}
+                  fill="#8e918d"
+                  fontSize="9"
+                  fontFamily="DM Mono, monospace"
+                >
+                  LAT {10 + i * 8}°N // UNCHARTED SEA
+                </text>
+              </g>
+            ))}
+
+            {/* CURVED DASHED SERPENTINE PATHS */}
             {allWaypoints.slice(0, -1).map((currentPoint, index) => {
               const nextPoint = allWaypoints[index + 1];
-              const pathD = buildCurvePath(currentPoint.coordinates, nextPoint.coordinates);
-              // Done path: if currentPoint is completed!
+              const pathD = buildVerticalCurvePath(currentPoint.coord, nextPoint.coord);
               const isSegmentDone = currentPoint.status === "completed";
 
               return (
-                <g key={`path-${currentPoint.id}-${nextPoint.id}`}>
+                <g key={`vpath-${currentPoint.id}-${nextPoint.id}`}>
                   {/* Backdrop shadow line */}
                   <path
                     d={pathD}
                     fill="none"
-                    stroke="#080b09"
-                    strokeWidth="4"
-                    opacity="0.8"
+                    stroke="#070a08"
+                    strokeWidth="6"
+                    opacity="0.9"
                   />
-                  {/* Actual dashed route */}
+                  {/* Actual dashed route: green if done, gray if upcoming */}
                   <path
                     d={pathD}
                     fill="none"
-                    stroke={isSegmentDone ? "#c7ed6b" : "rgba(142, 145, 141, 0.35)"}
-                    strokeWidth={isSegmentDone ? "2.75" : "2"}
-                    strokeDasharray={isSegmentDone ? "7 6" : "5 6"}
+                    stroke={isSegmentDone ? "#c7ed6b" : "rgba(142, 145, 141, 0.45)"}
+                    strokeWidth={isSegmentDone ? "3.5" : "2.2"}
+                    strokeDasharray={isSegmentDone ? "9 8" : "6 8"}
                     className={isSegmentDone ? "route-curved-done" : "route-curved-upcoming"}
                     filter={isSegmentDone ? `url(#${glowFilterId})` : undefined}
                   />
@@ -147,239 +212,341 @@ export function TreasureMapView({
               );
             })}
 
-            {/* DESTINATION ISLAND NODES */}
-            {sortedDestinations.map((destination) => {
-              const cx = (destination.coordinates.x / 100) * 1000;
-              const cy = (destination.coordinates.y / 100) * 580;
-              const isSelected = !selectedIsFinal && selectedDestination?.id === destination.id;
-              const isDone = destination.status === "completed";
-              const isCurrent = destination.status === "current";
-              const titleStr = getRoadmapText(destination.title, locale);
+            {/* DESTINATION ISLAND NODES (Spread vertically) */}
+            {destinationWaypoints.map((dest) => {
+              const { x: cx, y: cy } = dest.coord;
+              const isSelected = !selectedIsFinal && selectedDestination?.id === dest.id;
+              const isDone = dest.status === "completed";
+              const isCurrent = dest.status === "current";
+              const titleStr = getRoadmapText(dest.title, locale);
+
+              // Position for side treasure preview tag (if island on left -> tag on right, else tag on left)
+              const tagX = dest.isLeft ? cx + 65 : cx - 275;
 
               return (
-                <g
-                  key={destination.id}
-                  transform={`translate(${cx}, ${cy})`}
-                  className="map-node-trigger"
-                  onClick={() => {
-                    setSelectedDestinationId(destination.id);
-                    setSelectedIsFinal(false);
-                  }}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`${titleStr} (${destination.status})`}
-                >
-                  {/* Island Radial Glow */}
-                  {(isDone || isCurrent || isSelected) && (
-                    <circle
-                      r={isCurrent ? "46" : "34"}
-                      fill="url(#nodeActiveGlow)"
-                      className={isCurrent ? "animate-pulse" : ""}
-                    />
-                  )}
-
-                  {/* Selection highlight ring */}
-                  {isSelected && (
-                    <circle
-                      r="26"
-                      fill="none"
-                      stroke="#c7ed6b"
-                      strokeWidth="1.5"
-                      strokeDasharray="3 3"
-                    />
-                  )}
-
-                  {/* Destination Landform Base */}
-                  <circle
-                    r="16"
-                    fill={isDone ? "#17231c" : isCurrent ? "#1b2720" : "#121614"}
-                    stroke={isDone ? "#c7ed6b" : isCurrent ? "#c7ed6b" : "#404844"}
-                    strokeWidth={isDone || isCurrent ? "2.5" : "1.5"}
+                <g key={dest.id} className="map-destination-group">
+                  {/* Outer reef / shoal contour rings */}
+                  <ellipse
+                    cx={cx}
+                    cy={cy}
+                    rx="80"
+                    ry="55"
+                    fill="url(#reefGradient)"
+                  />
+                  <ellipse
+                    cx={cx}
+                    cy={cy}
+                    rx="68"
+                    ry="45"
+                    fill="none"
+                    stroke={isDone || isCurrent ? "rgba(199, 237, 107, 0.25)" : "rgba(80, 95, 88, 0.2)"}
+                    strokeWidth="1"
+                    strokeDasharray="4 4"
                   />
 
-                  {/* Icon / Marker within Node */}
-                  {isDone && (
-                    <g transform="translate(-7, -7)">
-                      <path
-                        d="M 3 8 L 6 11 L 12 4"
+                  {/* Island Node Trigger Button */}
+                  <g
+                    transform={`translate(${cx}, ${cy})`}
+                    className="map-node-trigger"
+                    onClick={() => {
+                      setSelectedDestinationId(dest.id);
+                      setSelectedIsFinal(false);
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`${titleStr} (${dest.status})`}
+                  >
+                    {/* Glowing Aura if active/done/current */}
+                    {(isDone || isCurrent || isSelected) && (
+                      <circle
+                        r={isCurrent ? "56" : "42"}
+                        fill="url(#nodeActiveGlow)"
+                        className={isCurrent ? "animate-pulse" : ""}
+                      />
+                    )}
+
+                    {/* Selection Dash Ring */}
+                    {isSelected && (
+                      <circle
+                        r="34"
                         fill="none"
                         stroke="#c7ed6b"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        strokeDasharray="4 4"
                       />
-                    </g>
-                  )}
+                    )}
 
-                  {isCurrent && (
-                    <>
-                      {/* Central pulsing core */}
-                      <circle r="4" fill="#c7ed6b" />
-                      {/* Anchored Voyager Ship Figurehead */}
-                      <g
-                        transform="translate(0, -32)"
-                        className="voyager-ship-anchor"
-                      >
-                        {/* Ship Hull */}
+                    {/* Island Core Circle */}
+                    <circle
+                      r="22"
+                      fill={isDone ? "#18261e" : isCurrent ? "#1f2d24" : "#131715"}
+                      stroke={isDone ? "#c7ed6b" : isCurrent ? "#c7ed6b" : "#45504a"}
+                      strokeWidth={isDone || isCurrent ? "3" : "2"}
+                    />
+
+                    {/* Done Icon: Checkmark */}
+                    {isDone && (
+                      <g transform="translate(-10, -10)">
                         <path
-                          d="M -15 14 Q 0 24 15 14 L 18 6 Q 0 9 -18 6 Z"
-                          fill="#c7ed6b"
+                          d="M 4 11 L 8 15 L 16 6"
+                          fill="none"
+                          stroke="#c7ed6b"
+                          strokeWidth="2.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
                         />
-                        {/* Mast & Sails */}
-                        <path d="M 0 -8 L 0 14" stroke="#ffffff" strokeWidth="2" />
-                        <path
-                          d="M 0 -6 L 13 0 L 0 6 Z"
-                          fill="#c7ed6b"
-                          opacity="0.95"
-                        />
-                        <path
-                          d="M 0 -4 L -11 1 L 0 5 Z"
-                          fill="#a3e635"
-                          opacity="0.75"
-                        />
-                        {/* Golden Pennant flag */}
-                        <polygon points="0,-8 6,-10 0,-12" fill="#e5a875" />
-                        <circle cx="0" cy="-8" r="1.5" fill="#ffd166" />
                       </g>
-                    </>
-                  )}
+                    )}
 
-                  {!isDone && !isCurrent && (
-                    <g transform="translate(-4, -5)" opacity="0.6">
-                      <rect x="0" y="4" width="8" height="6" rx="1" fill="#8e918d" />
-                      <path
-                        d="M 2 4 L 2 2 Q 4 0 6 2 L 6 4"
-                        fill="none"
-                        stroke="#8e918d"
-                        strokeWidth="1.2"
-                      />
-                    </g>
-                  )}
+                    {/* Current Icon: Pulsing Core + Large Voyager Ship Anchored */}
+                    {isCurrent && (
+                      <>
+                        <circle r="6" fill="#c7ed6b" />
+                        {/* Beautiful Anchored Ship on this island */}
+                        <g
+                          transform="translate(0, -42)"
+                          className="voyager-ship-anchor"
+                        >
+                          {/* Ship Hull */}
+                          <path
+                            d="M -22 18 Q 0 30 22 18 L 26 8 Q 0 12 -26 8 Z"
+                            fill="#c7ed6b"
+                          />
+                          {/* Main Mast & Sails */}
+                          <path d="M 0 -12 L 0 18" stroke="#ffffff" strokeWidth="2.5" />
+                          <path
+                            d="M 0 -10 L 18 -2 L 0 6 Z"
+                            fill="#c7ed6b"
+                            opacity="0.95"
+                          />
+                          <path
+                            d="M 0 -6 L -16 0 L 0 6 Z"
+                            fill="#a3e635"
+                            opacity="0.8"
+                          />
+                          {/* Pennant Flag */}
+                          <polygon points="0,-12 9,-15 0,-18" fill="#e5a875" />
+                          <circle cx="0" cy="-12" r="2" fill="#ffd166" />
+                        </g>
+                      </>
+                    )}
 
-                  {/* Destination Label below node */}
-                  <text
-                    y="32"
-                    textAnchor="middle"
-                    fill={isDone || isCurrent ? "#e9e7df" : "#8e918d"}
-                    fontSize="11"
-                    fontFamily="DM Mono, monospace"
-                    letterSpacing="0.04em"
-                    className="select-none pointer-events-none"
+                    {/* Upcoming Icon: Lock */}
+                    {!isDone && !isCurrent && (
+                      <g transform="translate(-6, -7)" opacity="0.6">
+                        <rect x="0" y="5" width="12" height="9" rx="1.5" fill="#8e918d" />
+                        <path
+                          d="M 3 5 L 3 3 Q 6 0 9 3 L 9 5"
+                          fill="none"
+                          stroke="#8e918d"
+                          strokeWidth="1.8"
+                        />
+                      </g>
+                    )}
+
+                    {/* Destination Label */}
+                    <text
+                      y="40"
+                      textAnchor="middle"
+                      fill={isDone || isCurrent ? "#e9e7df" : "#8e918d"}
+                      fontSize="14"
+                      fontWeight="500"
+                      fontFamily="Newsreader, serif"
+                      className="select-none pointer-events-none"
+                    >
+                      0{dest.order}. {titleStr}
+                    </text>
+
+                    {/* Status Pill Badge */}
+                    {isDone && (
+                      <text
+                        y="56"
+                        textAnchor="middle"
+                        fill="#c7ed6b"
+                        fontSize="10"
+                        fontFamily="DM Mono, monospace"
+                        fontWeight="bold"
+                        letterSpacing="0.08em"
+                        className="select-none pointer-events-none"
+                      >
+                        ✓ TREASURE CLAIMED
+                      </text>
+                    )}
+                    {isCurrent && (
+                      <text
+                        y="56"
+                        textAnchor="middle"
+                        fill="#e5a875"
+                        fontSize="10"
+                        fontFamily="DM Mono, monospace"
+                        fontWeight="bold"
+                        letterSpacing="0.08em"
+                        className="select-none pointer-events-none"
+                      >
+                        ⚓ VOYAGER ANCHORED HERE
+                      </text>
+                    )}
+                    {!isDone && !isCurrent && (
+                      <text
+                        y="56"
+                        textAnchor="middle"
+                        fill="#8e918d"
+                        fontSize="9"
+                        fontFamily="DM Mono, monospace"
+                        letterSpacing="0.06em"
+                        className="select-none pointer-events-none"
+                      >
+                        UNCHARTED TERRITORY
+                      </text>
+                    )}
+                  </g>
+
+                  {/* SIDE FLOATING TREASURE PREVIEW CARD ON MAP */}
+                  <g
+                    transform={`translate(${tagX}, ${cy - 50})`}
+                    className="island-treasure-tag cursor-pointer"
+                    onClick={() => {
+                      setSelectedDestinationId(dest.id);
+                      setSelectedIsFinal(false);
+                    }}
                   >
-                    0{destination.order}. {titleStr}
-                  </text>
-
-                  {/* Badge: CLAIMED or ANCHORED */}
-                  {isDone && (
+                    <rect
+                      width="210"
+                      height="100"
+                      rx="6"
+                      fill="#121814"
+                      stroke={isSelected ? "#c7ed6b" : "#243228"}
+                      strokeWidth="1.2"
+                      opacity="0.95"
+                    />
                     <text
-                      y="45"
-                      textAnchor="middle"
-                      fill="#c7ed6b"
+                      x="14"
+                      y="24"
+                      fill="#8e918d"
                       fontSize="9"
                       fontFamily="DM Mono, monospace"
-                      letterSpacing="0.08em"
-                      className="select-none pointer-events-none"
+                      letterSpacing="0.06em"
                     >
-                      TREASURE CLAIMED
+                      ISLAND TREASURES ({dest.treasures.filter((t) => t.completed).length}/{dest.treasures.length})
                     </text>
-                  )}
-                  {isCurrent && (
-                    <text
-                      y="45"
-                      textAnchor="middle"
-                      fill="#e5a875"
-                      fontSize="9"
-                      fontFamily="DM Mono, monospace"
-                      fontWeight="bold"
-                      letterSpacing="0.08em"
-                      className="select-none pointer-events-none"
-                    >
-                      ANCHORED HERE
-                    </text>
-                  )}
+                    {dest.treasures.slice(0, 3).map((tr, trIdx) => (
+                      <g key={tr.id} transform={`translate(14, ${44 + trIdx * 19})`}>
+                        <circle
+                          r="3"
+                          cx="3"
+                          cy="-3"
+                          fill={tr.completed ? "#c7ed6b" : "#505854"}
+                        />
+                        <text
+                          x="12"
+                          y="0"
+                          fill={tr.completed ? "#c7ed6b" : "#b0b3ae"}
+                          fontSize="10"
+                          fontFamily="DM Sans, sans-serif"
+                        >
+                          {tr.title.length > 24 ? tr.title.slice(0, 22) + "…" : tr.title}
+                        </text>
+                      </g>
+                    ))}
+                  </g>
                 </g>
               );
             })}
 
-            {/* FINAL TREASURE NODE (Final Project) */}
+            {/* FINAL TREASURE CITADEL AT THE VERY BOTTOM */}
             {(() => {
-              const fx = ((roadmap.finalProject.coordinates?.x ?? 92) / 100) * 1000;
-              const fy = ((roadmap.finalProject.coordinates?.y ?? 45) / 100) * 580;
+              const { x: fx, y: fy } = finalCoord;
               const isDone = roadmap.finalProject.status === "completed";
               const isCurrent = roadmap.finalProject.status === "current";
               const isSelected = selectedIsFinal;
               const finalTitle = getRoadmapText(roadmap.finalProject.title, locale);
 
               return (
-                <g
-                  transform={`translate(${fx}, ${fy})`}
-                  className="map-node-trigger"
-                  onClick={() => setSelectedIsFinal(true)}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Final Treasure: ${finalTitle}`}
-                >
-                  {/* Golden Halo */}
-                  <circle
-                    r="44"
+                <g className="map-final-destination-group">
+                  {/* Huge Golden Reef Base */}
+                  <ellipse
+                    cx={fx}
+                    cy={fy}
+                    rx="120"
+                    ry="70"
                     fill="url(#finalGoldGlow)"
-                    className="animate-pulse"
+                  />
+                  <ellipse
+                    cx={fx}
+                    cy={fy}
+                    rx="100"
+                    ry="58"
+                    fill="none"
+                    stroke="rgba(229, 168, 117, 0.4)"
+                    strokeWidth="1.5"
+                    strokeDasharray="6 6"
                   />
 
-                  {isSelected && (
-                    <circle
-                      r="30"
-                      fill="none"
-                      stroke="#e5a875"
-                      strokeWidth="1.5"
-                      strokeDasharray="4 4"
-                    />
-                  )}
+                  {/* Citadel Trigger */}
+                  <g
+                    transform={`translate(${fx}, ${fy})`}
+                    className="map-node-trigger"
+                    onClick={() => setSelectedIsFinal(true)}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`Final Treasure: ${finalTitle}`}
+                  >
+                    {isSelected && (
+                      <circle
+                        r="52"
+                        fill="none"
+                        stroke="#e5a875"
+                        strokeWidth="2"
+                        strokeDasharray="4 4"
+                      />
+                    )}
 
-                  {/* Citadel Island Base */}
-                  <polygon
-                    points="0,-22 22,-4 14,20 -14,20 -22,-4"
-                    fill="#241d17"
-                    stroke={isDone ? "#ffd166" : isCurrent ? "#c7ed6b" : "#e5a875"}
-                    strokeWidth="2.5"
-                  />
-
-                  {/* Crown / Chest Icon */}
-                  <g transform="translate(-10, -11)">
-                    <path
-                      d="M 2 16 L 18 16 L 20 8 L 15 11 L 10 4 L 5 11 L 0 8 Z"
-                      fill={isDone ? "#ffd166" : "#e5a875"}
-                      stroke="#111513"
-                      strokeWidth="1"
+                    {/* Massive Citadel Base Hexagon */}
+                    <polygon
+                      points="0,-36 34,-10 24,30 -24,30 -34,-10"
+                      fill="#261d15"
+                      stroke={isDone ? "#ffd166" : isCurrent ? "#c7ed6b" : "#e5a875"}
+                      strokeWidth="3.5"
                     />
-                    <circle cx="2" cy="7" r="1.5" fill="#ffd166" />
-                    <circle cx="10" cy="3" r="1.5" fill="#ffd166" />
-                    <circle cx="18" cy="7" r="1.5" fill="#ffd166" />
+
+                    {/* Grand Crown Icon */}
+                    <g transform="translate(-16, -18)">
+                      <path
+                        d="M 3 24 L 29 24 L 32 10 L 24 15 L 16 4 L 8 15 L 0 10 Z"
+                        fill={isDone ? "#ffd166" : "#e5a875"}
+                        stroke="#111513"
+                        strokeWidth="1.5"
+                      />
+                      <circle cx="3" cy="9" r="2" fill="#ffd166" />
+                      <circle cx="16" cy="3" r="2.5" fill="#ffd166" />
+                      <circle cx="29" cy="9" r="2" fill="#ffd166" />
+                    </g>
+
+                    {/* Grand Title and Badge */}
+                    <text
+                      y="52"
+                      textAnchor="middle"
+                      fill="#e5a875"
+                      fontSize="18"
+                      fontWeight="500"
+                      fontFamily="Newsreader, serif"
+                      className="select-none pointer-events-none"
+                    >
+                      ★ FINAL TREASURE: {finalTitle}
+                    </text>
+                    <text
+                      y="70"
+                      textAnchor="middle"
+                      fill={isDone ? "#c7ed6b" : "#8e918d"}
+                      fontSize="11"
+                      fontFamily="DM Mono, monospace"
+                      fontWeight="bold"
+                      letterSpacing="0.08em"
+                      className="select-none pointer-events-none"
+                    >
+                      {isDone ? "EXPEDITION COMPLETE // REWARD CLAIMED" : "THE ULTIMATE RESEARCH PROJECT"}
+                    </text>
                   </g>
-
-                  {/* Title and Badge */}
-                  <text
-                    y="36"
-                    textAnchor="middle"
-                    fill="#e5a875"
-                    fontSize="12"
-                    fontWeight="500"
-                    fontFamily="Newsreader, serif"
-                    className="select-none pointer-events-none"
-                  >
-                    ★ FINAL TREASURE
-                  </text>
-                  <text
-                    y="50"
-                    textAnchor="middle"
-                    fill={isDone ? "#c7ed6b" : "#8e918d"}
-                    fontSize="9"
-                    fontFamily="DM Mono, monospace"
-                    letterSpacing="0.08em"
-                    className="select-none pointer-events-none"
-                  >
-                    {isDone ? "EXPEDITION COMPLETE" : "THE FINAL PROJECT"}
-                  </text>
                 </g>
               );
             })()}
@@ -387,7 +554,7 @@ export function TreasureMapView({
         </div>
       </div>
 
-      {/* DESTINATION EXPLORER DRAWER / DETAIL PANEL */}
+      {/* DESTINATION EXPLORER DRAWER / DETAIL PANEL (Sticky on bottom or below map) */}
       <div className="destination-drawer">
         {selectedIsFinal ? (
           <div>
