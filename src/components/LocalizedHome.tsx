@@ -2,23 +2,61 @@
 
 import Link from "next/link";
 import { ArrowUpRight, GitBranch, Search, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   blockText,
+  Document,
   getDocuments,
   getTree,
   getUi,
   Locale,
   sectionLabel,
+  Tree,
   TreeNode,
 } from "@/lib/content";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export default function LocalizedHome({ locale }: { locale: Locale }) {
   const ui = getUi(locale).ui;
-  const documents = getDocuments(locale);
+  const [driveDocuments, setDriveDocuments] = useState<Document[] | null>(null);
+  const [driveTree, setDriveTree] = useState<Tree | null>(null);
+  const [driveLabels, setDriveLabels] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadDriveContent() {
+      try {
+        const response = await fetch("/api/content", { cache: "no-store" });
+        if (!response.ok) throw new Error("Google Drive content could not be loaded.");
+        const result = await response.json() as {
+          files?: { path: string; content: string }[];
+        };
+        const decode = (content: string) =>
+          JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(content), (char) => char.charCodeAt(0))));
+        const files = result.files ?? [];
+        const documents = files
+          .filter((file) => file.path.startsWith("content/locales/") && file.path.endsWith(".json"))
+          .map((file) => decode(file.content) as Document);
+        const treeFile = files.find((file) => file.path === "content/tree.json");
+        const sectionsFile = files.find((file) => file.path === "content/sections.json");
+        if (cancelled) return;
+        setDriveDocuments(documents);
+        if (treeFile) setDriveTree(decode(treeFile.content) as Tree);
+        if (sectionsFile) {
+          const sections = (decode(sectionsFile.content) as { sections?: Record<string, Partial<Record<Locale, string>>> }).sections ?? {};
+          setDriveLabels(Object.fromEntries(Object.entries(sections).map(([id, names]) => [id, names[locale] ?? names.en ?? id])));
+        }
+      } catch {
+        if (!cancelled) setDriveDocuments([]);
+      }
+    }
+    void loadDriveContent();
+    return () => { cancelled = true; };
+  }, [locale]);
+  const documents = driveDocuments ?? getDocuments(locale);
+  const knowledgeTree = driveTree
+    ? { ...driveTree, roots: localizeDriveTree(driveTree.roots, driveLabels ?? {}) }
+    : getTree(locale);
   const firstDocument = documents[0];
-  const knowledgeTree = getTree(locale);
   const [query, setQuery] = useState("");
   const normalized = query.trim().toLowerCase();
   const results = normalized
@@ -125,7 +163,7 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
             {results.length ? (
               results.map((document) => (
                 <Link key={document.id} href={`/${locale}/research/${document.slug}`} className="search-result">
-                  <span>{sectionLabel(document.section, locale)}</span>
+                  <span>{driveLabels?.[document.section] ?? sectionLabel(document.section, locale)}</span>
                   <strong>{document.title}</strong>
                   <p>{document.description}</p>
                 </Link>
@@ -142,7 +180,7 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
                 <Link href={`/${locale}/research/${document.slug}`} className="document-row" key={document.id}>
                   <span className="doc-index">0{index + 1}</span>
                   <div className="doc-main">
-                    <span className="doc-section">{sectionLabel(document.section, locale)}</span>
+                    <span className="doc-section">{driveLabels?.[document.section] ?? sectionLabel(document.section, locale)}</span>
                     <h3>{document.title}</h3>
                     <p>{document.description}</p>
                   </div>
@@ -231,4 +269,12 @@ function TreeDocuments({
       ))}
     </>
   );
+}
+
+function localizeDriveTree(nodes: TreeNode[], labels: Record<string, string>): TreeNode[] {
+  return nodes.map((node) => ({
+    ...node,
+    title: labels[node.id] ?? node.title,
+    children: node.children ? localizeDriveTree(node.children, labels) : node.children,
+  }));
 }
