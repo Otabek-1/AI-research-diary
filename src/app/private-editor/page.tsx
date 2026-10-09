@@ -528,7 +528,7 @@ export default function PrivateEditor() {
       setPendingFiles([]);
       setDeletedPaths([]);
       setPublishedRevision((revision) => revision + 1);
-      setMessage(`Saved to Google Drive and deployed: ${files.length} file(s). The public page shows them once Netlify finishes rebuilding.`);
+      setMessage(`Saved to Google Drive: ${files.length} file(s).`);
     } else setMessage(result.error || result.detail || "Google Drive save failed.");
   }
   function importFile(event: React.ChangeEvent<HTMLInputElement>) {
