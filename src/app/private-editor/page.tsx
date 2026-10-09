@@ -141,6 +141,40 @@ export default function PrivateEditor() {
     // Only re-open a document when the document or language changes.
   }, [locale, selectedId]);
   useEffect(() => {
+    let cancelled = false;
+    async function loadDriveContent() {
+      try {
+        const response = await fetch("/api/admin/storage", { cache: "no-store" });
+        if (!response.ok) throw new Error("Google Drive content could not be loaded.");
+        const result = await response.json() as {
+          files?: { path: string; content: string; encoding: "base64" }[];
+        };
+        const decoded = (file: { content: string }) =>
+          JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(file.content), (char) => char.charCodeAt(0))));
+        const driveDocuments = (result.files ?? [])
+          .filter((file) => file.path.startsWith("content/locales/") && file.path.endsWith(".json"))
+          .map((file) => decoded(file) as Document);
+        const treeFile = result.files?.find((file) => file.path === "content/tree.json");
+        const sectionsFile = result.files?.find((file) => file.path === "content/sections.json");
+        if (cancelled) return;
+        if (driveDocuments.length) {
+          setDocuments(driveDocuments);
+          const current = driveDocuments.find((item) => item.id === selectedId);
+          if (current) setDocument(current);
+        }
+        if (treeFile) setTree(decoded(treeFile) as Tree);
+        if (sectionsFile) {
+          const data = decoded(sectionsFile) as { sections?: Record<string, Partial<Record<Locale, string>>> };
+          setSectionLabels(Object.fromEntries(Object.entries(data.sections ?? {}).map(([id, names]) => [id, names.en ?? names.uz ?? names.ru ?? id])));
+        }
+      } catch (error) {
+        if (!cancelled) setMessage(error instanceof Error ? error.message : "Google Drive content could not be loaded.");
+      }
+    }
+    void loadDriveContent();
+    return () => { cancelled = true; };
+  }, [selectedId]);
+  useEffect(() => {
     window.localStorage.setItem(
       `field-notes-draft-${locale}-${selectedId}`,
       JSON.stringify(document),
@@ -171,7 +205,7 @@ export default function PrivateEditor() {
       const files = await build();
       const stale = new Set(files.map((file) => file.path));
       setPendingFiles((current) => [...current.filter((file) => !stale.has(file.path)), ...files]);
-      setMessage(`${label} queued — press Publish to GitHub to make it public.`);
+      setMessage(`${label} queued — press Save to Google Drive to publish it.`);
     } catch {
       setMessage(`${label} could not be prepared locally.`);
     }
@@ -209,7 +243,7 @@ export default function PrivateEditor() {
   function updateDocument(patch: Partial<Document>) {
     setDocument((current) => ({ ...current, ...patch, updatedAt: today }));
     if (!patch.slug || patch.slug === document.slug) return;
-    // Moving the slug moves the JSON file on GitHub, so the old path has to go too.
+    // Moving the slug moves the JSON file in the shared content store, so the old path has to go too.
     const previous = `content/locales/${locale}/${document.slug}.json`;
     const moved = [...locales.map((code) => `content/locales/${code}/${document.slug}.json`), previous];
     setDeletedPaths((current) => [
@@ -357,7 +391,7 @@ export default function PrivateEditor() {
     window.localStorage.setItem(`field-notes-draft-${locale}-${id}`, JSON.stringify(nextDocument));
     setTree((current) => ({ ...current, roots: addDocumentToTree(current.roots, sectionId, id) }));
     const ready = findTreeNode(tree.roots, sectionId)?.title ?? sectionLabels[sectionId] ?? "the selected section";
-    setMessage(`Draft “${title}” created as /${slug} inside ${ready}. Press Publish to GitHub to make it public.`);
+    setMessage(`Draft “${title}” created as /${slug} inside ${ready}. Press Save to Google Drive to make it public.`);
     // A section without any published document never reaches the public page, so the
     // section is queued here and committed together with the new research.
     const anchors = findTreePath(tree.roots, sectionId);
@@ -367,7 +401,7 @@ export default function PrivateEditor() {
     const nextTitle = window.prompt("Rename section", title)?.trim();
     if (!nextTitle || nextTitle === title) return;
     renameSection(nodeId, nextTitle);
-    setMessage(`Renamed to “${nextTitle}”. Press Publish to GitHub to update the public page.`);
+    setMessage(`Renamed to “${nextTitle}”. Press Save to Google Drive to update the public page.`);
   }
   function deleteTreeNode(nodeId: string, title: string) {
     if (!window.confirm(`Delete section “${title}” and its nested sections?`)) return;
@@ -377,7 +411,7 @@ export default function PrivateEditor() {
     setDeletedPaths((current) => [...new Set([...current, ...deletedSlugs, "content/sections.json", "content/tree.json"])]);
     setTree(nextTree);
     uploadSoon(`Delete section “${title}”`, async () => [await fileFromText("content/tree.json", `${JSON.stringify(nextTree, null, 2)}\n`)]);
-    setMessage(`Section “${title}” removed locally. Press Publish to GitHub to remove it from the public page.`);
+    setMessage(`Section “${title}” removed locally. Press Save to Google Drive to remove it from the public page.`);
   }
   function deleteDocument(documentId: string) {
     const target = library.find((item) => item.id === documentId);
@@ -388,7 +422,7 @@ export default function PrivateEditor() {
     setDeletedPaths((current) => [...new Set([...current, ...locales.map((language) => `content/locales/${language}/${target.slug}.json`)])]);
     if (selectedId === documentId) { setSelectedId("new-research-note"); setDocument(starter); }
     uploadSoon(`Remove research “${target.title}”`, async () => [await fileFromText("content/tree.json", `${JSON.stringify(nextTree, null, 2)}\n`)]);
-    setMessage(`“${target.title}” removed locally. Press Publish to GitHub to remove it from the public page.`);
+    setMessage(`“${target.title}” removed locally. Press Save to Google Drive to remove it from the public page.`);
   }
   function renameHeading(id: string, currentText: string) {
     const nextText = window.prompt("Rename heading", currentText)?.trim();
@@ -484,18 +518,18 @@ export default function PrivateEditor() {
     }
     return { files: [...files.values()], errors };
   }
-  async function publishToGitHub() {
+  async function saveToGoogleDrive() {
     const { files, errors } = collectPublishFiles();
     if (errors.length) { setMessage(errors.join(" | ")); return; }
-    setMessage("Publishing to GitHub...");
+    setMessage("Saving to Google Drive...");
     const response = await fetch("/api/admin/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files, deletes: deletedPaths, message: `Update research structure (${locale})` }) });
     const result = await response.json() as { ok?: boolean; error?: string; detail?: string };
     if (response.ok && result.ok) {
       setPendingFiles([]);
       setDeletedPaths([]);
       setPublishedRevision((revision) => revision + 1);
-      setMessage(`Published to GitHub: ${files.length} file(s) committed. The public page shows them once Netlify finishes rebuilding.`);
-    } else setMessage(result.error || result.detail || "GitHub publish failed.");
+      setMessage(`Saved to Google Drive and deployed: ${files.length} file(s). The public page shows them once Netlify finishes rebuilding.`);
+    } else setMessage(result.error || result.detail || "Google Drive save failed.");
   }
   function importFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -509,7 +543,7 @@ export default function PrivateEditor() {
         setImported((current) => [...current.filter((item) => item.id !== parsed.id), parsed]);
         setSelectedId(parsed.id);
         setDocument(parsed);
-        setMessage("Document imported. Pick a section in Metadata, then Publish to GitHub.");
+        setMessage("Document imported. Pick a section in Metadata, then Save to Google Drive.");
       } catch (error) {
         setMessage(
           error instanceof Error ? error.message : "Could not import document",
@@ -553,8 +587,8 @@ export default function PrivateEditor() {
           >
             <Download size={15} /> Finish & Export
           </button>
-          <button className="workspace-button workspace-primary" onClick={publishToGitHub}>
-            <Upload size={15} /> Publish to GitHub{pendingFiles.length ? ` (${pendingFiles.length})` : ""}
+          <button className="workspace-button workspace-primary" onClick={saveToGoogleDrive}>
+            <Upload size={15} /> Save to Google Drive{pendingFiles.length ? ` (${pendingFiles.length})` : ""}
           </button>
         </div>
       </header>
@@ -766,7 +800,7 @@ export default function PrivateEditor() {
                       const sectionId = event.target.value;
                       updateDocument({ section: sectionId });
                       setTree((current) => ({ ...current, roots: addDocumentToTree(current.roots, sectionId, document.id) }));
-                      setMessage(` under ${sectionLabels[sectionId] ?? titleCase(sectionId)}. Press Publish to GitHub to store it there.`);
+                      setMessage(` under ${sectionLabels[sectionId] ?? titleCase(sectionId)}. Press Save to Google Drive to store it there.`);
                     }}
                   >
                     {tree.roots.map((root) => [root, ...collectTreeNodes(root.children ?? [])].map((node) => (

@@ -4,7 +4,12 @@ type DriveFile = {
   encoding?: "utf8" | "base64";
 };
 
-type DriveItem = { id: string; name: string };
+type DriveItem = { id: string; name: string; mimeType?: string };
+export type StoredDriveFile = {
+  path: string;
+  content: string;
+  encoding: "utf8" | "base64";
+};
 
 const driveApi = "https://www.googleapis.com/drive/v3";
 const uploadApi = "https://www.googleapis.com/upload/drive/v3/files";
@@ -18,11 +23,10 @@ export function isGoogleDriveConfigured() {
   );
 }
 
-export async function syncFilesToGoogleDrive(
-  files: DriveFile[],
-  deletes: string[],
-) {
-  if (!isGoogleDriveConfigured()) return { configured: false, files: 0, deletes: 0 };
+export async function syncFilesToGoogleDrive(files: DriveFile[], deletes: string[]) {
+  if (!isGoogleDriveConfigured()) {
+    return { configured: false, files: 0, deletes: 0 };
+  }
 
   const accessToken = await getAccessToken();
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID as string;
@@ -39,7 +43,7 @@ export async function syncFilesToGoogleDrive(
     if (!existing) continue;
     const response = await fetch(`${driveApi}/files/${encodeURIComponent(existing.id)}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: "Bearer " + accessToken },
     });
     if (!response.ok) {
       throw new Error(`Google Drive rejected deletion of ${path}: ${await response.text()}`);
@@ -48,6 +52,35 @@ export async function syncFilesToGoogleDrive(
   }
 
   return { configured: true, files: syncedFiles, deletes: deletedFiles };
+}
+
+export async function readFilesFromGoogleDrive(): Promise<StoredDriveFile[]> {
+  if (!isGoogleDriveConfigured()) {
+    throw new Error("Google Drive storage is not configured on the server.");
+  }
+  const accessToken = await getAccessToken();
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID as string;
+  const query = `'${escapeQuery(folderId)}' in parents and trashed = false`;
+  const response = await fetch(
+    `${driveApi}/files?q=${encodeURIComponent(query)}&pageSize=1000&fields=files(id,name,mimeType)`,
+    { headers: { Authorization: "Bearer " + accessToken } },
+  );
+  if (!response.ok) throw new Error(`Google Drive listing failed: ${await response.text()}`);
+  const result = (await response.json()) as { files?: DriveItem[] };
+  const files: StoredDriveFile[] = [];
+
+  for (const file of result.files ?? []) {
+    const contentResponse = await fetch(
+      `${driveApi}/files/${encodeURIComponent(file.id)}?alt=media`,
+      { headers: { Authorization: "Bearer " + accessToken } },
+    );
+    if (!contentResponse.ok) {
+      throw new Error(`Google Drive could not read ${file.name}: ${await contentResponse.text()}`);
+    }
+    const content = Buffer.from(await contentResponse.arrayBuffer()).toString("base64");
+    files.push({ path: file.name, content, encoding: "base64" });
+  }
+  return files;
 }
 
 async function getAccessToken() {
@@ -61,7 +94,10 @@ async function getAccessToken() {
       grant_type: "refresh_token",
     }),
   });
-  const result = (await response.json()) as { access_token?: string; error_description?: string };
+  const result = (await response.json()) as {
+    access_token?: string;
+    error_description?: string;
+  };
   if (!response.ok || !result.access_token) {
     throw new Error(result.error_description || "Google Drive access token could not be created.");
   }
@@ -72,7 +108,7 @@ async function findFile(accessToken: string, folderId: string, path: string) {
   const query = `'${escapeQuery(folderId)}' in parents and name = '${escapeQuery(path)}' and trashed = false`;
   const response = await fetch(
     `${driveApi}/files?q=${encodeURIComponent(query)}&pageSize=1&fields=files(id,name)`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+    { headers: { Authorization: "Bearer " + accessToken } },
   );
   if (!response.ok) throw new Error(`Google Drive lookup failed: ${await response.text()}`);
   const result = (await response.json()) as { files?: DriveItem[] };
@@ -91,11 +127,14 @@ async function uploadFile(
     ...(fileId ? {} : { parents: [folderId] }),
   };
   const boundary = `field-notes-${crypto.randomUUID()}`;
-  const content = file.encoding === "base64"
-    ? Buffer.from(file.content, "base64")
-    : Buffer.from(file.content, "utf8");
+  const content =
+    file.encoding === "base64"
+      ? Buffer.from(file.content, "base64")
+      : Buffer.from(file.content, "utf8");
   const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`),
+    Buffer.from(
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
+    ),
     Buffer.from(`--${boundary}\r\nContent-Type: ${metadata.mimeType}\r\n\r\n`),
     content,
     Buffer.from(`\r\n--${boundary}--`),
@@ -106,12 +145,14 @@ async function uploadFile(
   const response = await fetch(endpoint, {
     method: fileId ? "PATCH" : "POST",
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: "Bearer " + accessToken,
       "Content-Type": `multipart/related; boundary=${boundary}`,
     },
     body,
   });
-  if (!response.ok) throw new Error(`Google Drive rejected ${file.path}: ${await response.text()}`);
+  if (!response.ok) {
+    throw new Error(`Google Drive rejected ${file.path}: ${await response.text()}`);
+  }
 }
 
 function escapeQuery(value: string) {
