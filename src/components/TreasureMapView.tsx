@@ -68,6 +68,19 @@ export function TreasureMapView({
     y: START_Y + sortedDestinations.length * STEP_Y + 200,
   };
   const totalMapHeight = finalCoord.y + 260;
+  const lastDestinationCoord = destinationWaypoints[destinationWaypoints.length - 1]?.coord;
+  const mistCenter = lastDestinationCoord
+    ? {
+        x: (lastDestinationCoord.x + finalCoord.x) / 2,
+        y: (lastDestinationCoord.y + finalCoord.y) / 2,
+      }
+    : null;
+  const mistAngle = lastDestinationCoord
+    ? Math.atan2(finalCoord.y - lastDestinationCoord.y, finalCoord.x - lastDestinationCoord.x) * (180 / Math.PI)
+    : 0;
+  const mistLength = lastDestinationCoord
+    ? Math.hypot(finalCoord.x - lastDestinationCoord.x, finalCoord.y - lastDestinationCoord.y)
+    : 0;
 
   // Build all sequential points for curved paths
   const allWaypoints = [
@@ -159,6 +172,11 @@ export function TreasureMapView({
                 <stop offset="60%" stopColor="#1a2820" stopOpacity="0.8" />
                 <stop offset="100%" stopColor="#0b110e" stopOpacity="0" />
               </radialGradient>
+              <linearGradient id="unchartedMistGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#9ba99c" stopOpacity="0.04" />
+                <stop offset="50%" stopColor="#d8ded4" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#9ba99c" stopOpacity="0.04" />
+              </linearGradient>
             </defs>
 
             {/* Maritime Latitude / Longitude Depth Markings along map */}
@@ -474,6 +492,41 @@ export function TreasureMapView({
                 </g>
               );
             })}
+
+            {/* UNCHARTED MIST BETWEEN THE LAST WAYPOINT AND FINAL TREASURE */}
+            {mistCenter && (
+              <g
+                className="uncharted-mist"
+                transform={`translate(${mistCenter.x}, ${mistCenter.y}) rotate(${mistAngle})`}
+                aria-label="Uncharted mist concealing future destinations"
+              >
+                <rect
+                  x={-mistLength / 2}
+                  y="-62"
+                  width={mistLength}
+                  height="124"
+                  rx="62"
+                  fill="url(#unchartedMistGradient)"
+                  filter={`url(#${glowFilterId})`}
+                />
+                <ellipse cx={-mistLength * 0.28} cy="-12" rx="82" ry="38" fill="#cbd5cb" opacity="0.1" />
+                <ellipse cx={0} cy="12" rx="105" ry="46" fill="#e2e7df" opacity="0.13" />
+                <ellipse cx={mistLength * 0.28} cy="-8" rx="78" ry="34" fill="#cbd5cb" opacity="0.1" />
+                <text
+                  y="4"
+                  textAnchor="middle"
+                  fill="#d8ded4"
+                  fontSize="11"
+                  fontFamily="DM Mono, monospace"
+                  fontWeight="bold"
+                  letterSpacing="0.12em"
+                  opacity="0.8"
+                  transform={`rotate(${-mistAngle})`}
+                >
+                  UNCHARTED MIST
+                </text>
+              </g>
+            )}
 
             {/* FINAL TREASURE CITADEL AT THE VERY BOTTOM */}
             {(() => {

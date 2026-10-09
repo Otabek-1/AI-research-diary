@@ -375,6 +375,21 @@
   height: auto;
 }
 
+.uncharted-mist {
+  pointer-events: none;
+  transform-origin: center;
+  animation: mistDrift 8s ease-in-out infinite;
+}
+
+@keyframes mistDrift {
+  0%, 100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* Interactive Island Node Triggers */
 .map-node-trigger {
   cursor: pointer;
