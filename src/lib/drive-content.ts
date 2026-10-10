@@ -2,7 +2,7 @@ import { readFilesFromGoogleDrive } from "@/lib/google-drive";
 import { Document, Locale, Tree, TreeNode } from "@/lib/content";
 
 type DriveContent = {
-  documents: Record<Locale, Document[]>;
+  documents: { en: Document[] };
   tree: Tree;
   labels: Record<string, Partial<Record<Locale, string>>>;
 };
@@ -11,11 +11,12 @@ export async function getDriveContent(): Promise<DriveContent> {
   const files = await readFilesFromGoogleDrive();
   const decode = (content: string) =>
     JSON.parse(Buffer.from(content, "base64").toString("utf8"));
-  const documents: Record<Locale, Document[]> = { en: [], uz: [], ru: [] };
+  const documents: { en: Document[] } = { en: [] };
 
   for (const file of files) {
-    const match = file.path.match(/^content\/locales\/(en|uz|ru)\/.+\.json$/);
-    if (match) documents[match[1] as Locale].push(decode(file.content) as Document);
+    if (file.path.match(/^content\/locales\/en\/.+\.json$/)) {
+      documents.en.push(decode(file.content) as Document);
+    }
   }
   const treeFile = files.find((file) => file.path === "content/tree.json");
   const sectionsFile = files.find((file) => file.path === "content/sections.json");
@@ -29,25 +30,23 @@ export async function getDriveContent(): Promise<DriveContent> {
   return { documents, tree, labels };
 }
 
-export function getDriveDocuments(content: DriveContent, locale: Locale) {
+export function getDriveDocuments(content: DriveContent) {
   const ids = new Set(flattenDocumentIds(content.tree.roots));
-  const localized = content.documents[locale];
-  const fallback = content.documents.en;
   return [...ids]
-    .map((id) => localized.find((document) => document.id === id) ?? fallback.find((document) => document.id === id))
+    .map((id) => content.documents.en.find((document) => document.id === id))
     .filter((document): document is Document => Boolean(document && document.status === "published"));
 }
 
-export function getDriveDocument(content: DriveContent, slug: string, locale: Locale) {
-  return getDriveDocuments(content, locale).find(
+export function getDriveDocument(content: DriveContent, slug: string) {
+  return getDriveDocuments(content).find(
     (document) => document.slug === slug || document.id === slug,
   );
 }
 
-export function getDriveSectionLabel(content: DriveContent, section: string, locale: Locale) {
+export function getDriveSectionLabel(content: DriveContent, section: string) {
   return section
     .split("/")
-    .map((part) => content.labels[part]?.[locale] ?? content.labels[part]?.en ?? part.replace(/-/g, " "))
+    .map((part) => content.labels[part]?.en ?? part.replace(/-/g, " "))
     .join(" / ");
 }
 

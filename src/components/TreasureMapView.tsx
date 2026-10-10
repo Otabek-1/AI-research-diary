@@ -16,7 +16,6 @@ import {
   ChevronDown,
   ArrowUpRight,
 } from "lucide-react";
-import { Locale } from "@/lib/content";
 import {
   RoadmapData,
   TreasureItem,
@@ -30,7 +29,7 @@ export function TreasureMapView({
   locale,
 }: {
   roadmap: RoadmapData;
-  locale: Locale;
+  locale: string;
 }) {
   const progress = computeRoadmapProgress(roadmap);
   const [selectedDestinationId, setSelectedDestinationId] = useState<string | null>(
@@ -451,7 +450,7 @@ export function TreasureMapView({
                       ISLAND TREASURES ({dest.treasures.filter((t) => t.completed).length}/{dest.treasures.length})
                     </text>
                     {dest.treasures.slice(0, 3).map((tr, trIdx) => {
-                      const trLink = resolveTreasureLink(tr, locale);
+                      const trLink = resolveTreasureLink(tr);
                       return (
                         <g
                           key={tr.id}
@@ -786,7 +785,7 @@ function TreasureCard({
   locale,
 }: {
   treasure: TreasureItem;
-  locale: Locale;
+  locale: string;
 }) {
   const IconComponent =
     treasure.type === "gem"
@@ -797,7 +796,7 @@ function TreasureCard({
       ? Key
       : Shield;
 
-  const targetLink = resolveTreasureLink(treasure, locale);
+  const targetLink = resolveTreasureLink(treasure);
   const isExternal = Boolean(
     targetLink && (targetLink.startsWith("http://") || targetLink.startsWith("https://")),
   );

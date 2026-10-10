@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Compass, Sparkles, Anchor, CheckCircle2, ChevronRight } from "lucide-react";
-import { Locale } from "@/lib/content";
 import {
   RoadmapData,
   defaultRoadmap,
@@ -14,7 +13,7 @@ export function TreasureHeroSection({
   locale,
   roadmap = defaultRoadmap,
 }: {
-  locale: Locale;
+  locale: string;
   roadmap?: RoadmapData;
 }) {
   const progress = computeRoadmapProgress(roadmap);
@@ -196,7 +195,7 @@ export function TreasureHeroSection({
 
         <div className="treasure-hero-actions">
           <Link
-            href={`/${locale}/treasure-map`}
+            href="/treasure-map"
             className="button button-primary treasure-cta-button"
           >
             <Compass size={17} />

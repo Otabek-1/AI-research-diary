@@ -17,7 +17,6 @@ import {
   Upload,
   Link2,
 } from "lucide-react";
-import { Locale } from "@/lib/content";
 import {
   RoadmapData,
   RoadmapDestination,
@@ -39,7 +38,7 @@ export function AdminRoadmapManager({
   onChange: (updated: RoadmapData) => void;
   onSaveToDrive: () => Promise<void>;
   onClose: () => void;
-  locale: Locale;
+  locale: string;
   isSaving?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<"destinations" | "final">("destinations");
@@ -192,7 +191,7 @@ export function AdminRoadmapManager({
 
           <div className="flex items-center gap-2">
             <Link
-              href={`/${locale}/treasure-map`}
+              href="/treasure-map"
               target="_blank"
               className="px-3 py-1.5 border border-[#2b302e] hover:border-[#c7ed6b] text-[#8e918d] hover:text-[#c7ed6b] font-mono text-xs rounded inline-flex items-center gap-1.5 transition-colors"
             >
@@ -441,7 +440,7 @@ export function AdminRoadmapManager({
                                   </span>
                                   <input
                                     type="text"
-                                    placeholder="Masalan: neural-networks yoki /uz/research/neural-networks"
+                                    placeholder="Masalan: neural-networks yoki /research/neural-networks"
                                     value={treasure.linkUrl ?? treasure.docSlug ?? ""}
                                     onChange={(e) =>
                                       updateTreasure(dest.id, treasure.id, {
@@ -452,7 +451,7 @@ export function AdminRoadmapManager({
                                   />
                                   {(treasure.linkUrl || treasure.docSlug) && (
                                     <a
-                                      href={resolveTreasureLink(treasure, locale) ?? "#"}
+                                      href={resolveTreasureLink(treasure) ?? "#"}
                                       target="_blank"
                                       rel="noreferrer"
                                       className="p-1 text-[#c7ed6b] hover:text-[#ddfa91]"

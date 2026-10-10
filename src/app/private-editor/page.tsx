@@ -32,10 +32,8 @@ import {
   Document,
   getDocuments,
   getSectionLabels,
-  getTranslationStatus,
   getTree,
   Locale,
-  locales,
   Tree,
   TreeNode,
 } from "@/lib/content";
@@ -79,13 +77,13 @@ const starter: Document = {
 };
 
 export default function PrivateEditor() {
-  const [locale, setLocale] = useState<Locale>("en");
+  const locale: Locale = "en";
   const [documents, setDocuments] = useState<Document[]>(() =>
-    getDocuments("en"),
+    getDocuments(),
   );
   const [selectedId, setSelectedId] = useState(starter.id);
   const [document, setDocument] = useState<Document>(() => starter);
-  const [tree, setTree] = useState(() => getTree("en"));
+  const [tree, setTree] = useState(() => getTree());
   const [sectionLabels, setSectionLabels] = useState<Record<string, string>>(() =>
     getSectionLabels(),
   );
@@ -107,7 +105,6 @@ export default function PrivateEditor() {
   const [activeBlock, setActiveBlock] = useState<number | null>(null);
   const [leftWidth, setLeftWidth] = useState(255);
   const [rightWidth, setRightWidth] = useState(250);
-  const status = getTranslationStatus(selectedId);
   const headings = document.content.filter((block) => block.type === "heading");
   const titleDraft = titleDrafts[locale];
   const library = useMemo(() => {
@@ -117,11 +114,9 @@ export default function PrivateEditor() {
     });
     // Documents the editor has re-opened, edited but not published yet stay reachable
     // through the library tree even after a reload.
-    const locals = locales.flatMap((code) =>
-      Object.keys(draftTouched).some((key) => key.startsWith(`${code}:`) && draftTouched[key])
-        ? headersFor(code).flatMap((id) => [readLocalDraft(code, id)])
-        : [],
-    );
+    const locals = Object.keys(draftTouched).some((key) => key.startsWith("en:") && draftTouched[key])
+      ? headersFor().flatMap((id) => [readLocalDraft("en", id)])
+      : [];
     [...locals, ...imported].forEach((item) => {
       if (item?.id && !byId.has(item.id)) byId.set(item.id, item);
     });
@@ -180,7 +175,7 @@ export default function PrivateEditor() {
         if (treeFile) setTree(decoded(treeFile) as Tree);
         if (sectionsFile) {
           const data = decoded(sectionsFile) as { sections?: Record<string, Partial<Record<Locale, string>>> };
-          setSectionLabels(Object.fromEntries(Object.entries(data.sections ?? {}).map(([id, names]) => [id, names.en ?? names.uz ?? names.ru ?? id])));
+          setSectionLabels(Object.fromEntries(Object.entries(data.sections ?? {}).map(([id, names]) => [id, names.en ?? id])));
         }
         const driveRoadmap = parseRoadmapFromFiles(result.files ?? []);
         if (driveRoadmap) setRoadmap(driveRoadmap);
@@ -240,32 +235,12 @@ export default function PrivateEditor() {
       );
     }
   }
-  function switchLocale(nextLocale: Locale) {
-    const nextDocuments = getDocuments(nextLocale);
-    const local = readLocalDraft(nextLocale, selectedId);
-    setLocale(nextLocale);
-    setDocuments(
-      local && !nextDocuments.some((item) => item.id === local.id)
-        ? [...nextDocuments, local]
-        : nextDocuments,
-    );
-    const next = nextDocuments.find((item) => item.id === selectedId) ?? local;
-    setDocument(
-      next ?? {
-        ...document,
-        title: "",
-        description: "",
-        content: [{ type: "paragraph", text: "Translation not started yet." }],
-      },
-    );
-    setMessage(next ? "Translation opened" : "New translation draft");
-  }
   function updateDocument(patch: Partial<Document>) {
     setDocument((current) => ({ ...current, ...patch, updatedAt: today }));
     if (!patch.slug || patch.slug === document.slug) return;
     // Moving the slug moves the JSON file in the shared content store, so the old path has to go too.
     const previous = `content/locales/${locale}/${document.slug}.json`;
-    const moved = [...locales.map((code) => `content/locales/${code}/${document.slug}.json`), previous];
+    const moved = [`content/locales/en/${document.slug}.json`, previous];
     setDeletedPaths((current) => [
       ...new Set([...current, ...moved].filter((path) => path !== `content/locales/${locale}/${patch.slug}.json`)),
     ]);
@@ -299,16 +274,12 @@ export default function PrivateEditor() {
     if (documentId === selectedId) updateDocumentTitle(clean);
     uploadSoon(`Rename research to “${clean}”`, async () => {
       const files: PublishFile[] = [];
-      for (const code of locales) {
-        const local = documentId === selectedId
-          ? { ...document, title: code === locale ? clean : document.title }
-          : readLocalDraft(code, documentId);
-        const fallback = getDocuments(code).find((item) => item.id === documentId);
-        const source = local ?? fallback;
-        if (!source) continue;
-        const doc = code === locale ? { ...source, title: clean } : source;
-        files.push(serializeDocument(doc).file(`content/locales/${code}/${source.slug}.json`));
-      }
+      const local = documentId === selectedId
+        ? { ...document, title: clean }
+        : readLocalDraft("en", documentId);
+      const fallback = getDocuments().find((item) => item.id === documentId);
+      const source = local ?? fallback;
+      if (source) files.push(serializeDocument({ ...source, title: clean }).file(`content/locales/en/${source.slug}.json`));
       files.push(await buildSectionFile(tree, sectionId, { ...sectionLabels, [sectionId]: clean }));
       return files;
     });
@@ -427,7 +398,7 @@ export default function PrivateEditor() {
     if (!window.confirm(`Delete section “${title}” and its nested sections?`)) return;
     const deletedIds = collectDocumentIds(tree.roots, nodeId);
     const nextTree = { ...tree, roots: removeTreeNode(tree.roots, nodeId) };
-    const deletedSlugs = library.filter((item) => deletedIds.includes(item.id)).flatMap((item) => locales.map((language) => `content/locales/${language}/${item.slug}.json`));
+    const deletedSlugs = library.filter((item) => deletedIds.includes(item.id)).map((item) => `content/locales/en/${item.slug}.json`);
     setDeletedPaths((current) => [...new Set([...current, ...deletedSlugs, "content/sections.json", "content/tree.json"])]);
     setTree(nextTree);
     uploadSoon(`Delete section “${title}”`, async () => [await fileFromText("content/tree.json", `${JSON.stringify(nextTree, null, 2)}\n`)]);
@@ -439,7 +410,7 @@ export default function PrivateEditor() {
     const nextTree = { ...tree, roots: removeDocumentFromTree(tree.roots, documentId) };
     setDocuments((current) => current.filter((item) => item.id !== documentId));
     setTree(nextTree);
-    setDeletedPaths((current) => [...new Set([...current, ...locales.map((language) => `content/locales/${language}/${target.slug}.json`)])]);
+    setDeletedPaths((current) => [...new Set([...current, `content/locales/en/${target.slug}.json`])]);
     if (selectedId === documentId) { setSelectedId("new-research-note"); setDocument(starter); }
     uploadSoon(`Remove research “${target.title}”`, async () => [await fileFromText("content/tree.json", `${JSON.stringify(nextTree, null, 2)}\n`)]);
     setMessage(`“${target.title}” removed locally. Press Save to Google Drive to remove it from the public page.`);
@@ -629,7 +600,7 @@ export default function PrivateEditor() {
           </button>
           <Link
             className="workspace-button"
-            href={`/en/research/${document.slug}`}
+            href={`/research/${document.slug}`}
             target="_blank"
           >
             <Sparkles size={15} /> Preview
@@ -700,17 +671,6 @@ export default function PrivateEditor() {
               <p className="save-state">
                 <Save size={13} /> {message}
               </p>
-            </div>
-            <div className="language-tabs">
-              {locales.map((code) => (
-                <button
-                  className={code === locale ? "selected" : ""}
-                  key={code}
-                  onClick={() => switchLocale(code)}
-                >
-                  {code.toUpperCase()} {status[code] ? "✓" : "◐"}
-                </button>
-              ))}
             </div>
           </div>
           <div className="editor-document">
@@ -1412,8 +1372,8 @@ function sectionLabelFrom(tree: Tree, labels: Record<string, string>, nodeId: st
   if (!path.length) return titleCase(nodeId);
   return path.map((id) => labels[id] ?? titleCase(id)).join(" / ");
 }
-function headersFor(locale: Locale) {
-  return getDocuments(locale).map((item) => item.id);
+function headersFor() {
+  return getDocuments().map((item) => item.id);
 }
 function publishedLibrary(documents: Document[], tree: Tree) {
   const visible = new Set(flattenTreeIds(tree));

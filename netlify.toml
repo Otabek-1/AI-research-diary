@@ -18,15 +18,8 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Preserve locale-prefixed deep links when Netlify receives a direct browser request.
-[[redirects]]
-  from = "/:locale/article/:slug"
-  to = "/:locale/research/:slug"
-  status = 301
-  force = true
-
 [[redirects]]
   from = "/article/:slug"
-  to = "/en/research/:slug"
+  to = "/research/:slug"
   status = 301
   force = true

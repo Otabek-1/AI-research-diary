@@ -2,14 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import {
   Compass,
   ArrowLeft,
   Anchor,
 } from "lucide-react";
-import { isLocale, Locale } from "@/lib/content";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import {
   RoadmapData,
   defaultRoadmap,
@@ -20,10 +17,7 @@ import {
 import { TreasureMapView } from "@/components/TreasureMapView";
 
 export default function TreasureMapPage() {
-  const params = useParams();
-  const locale = (typeof params?.locale === "string" && isLocale(params.locale)
-    ? params.locale
-    : "en") as Locale;
+  const locale = "en" as string;
 
   const [roadmap, setRoadmap] = useState<RoadmapData>(defaultRoadmap);
   const [isDriveSynced, setIsDriveSynced] = useState(false);
@@ -65,21 +59,20 @@ export default function TreasureMapPage() {
     <main className="site-shell">
       {/* Topbar */}
       <header className="topbar">
-        <Link className="wordmark" href={`/${locale}`}>
+        <Link className="wordmark" href="/">
           FIELD / NOTES<span>01</span>
         </Link>
         <nav className="public-nav" aria-label="Primary navigation">
-          <Link href={`/${locale}#archive`}>
-            {locale === "uz" ? "Arxiv" : locale === "ru" ? "Архив" : "Archive"}
+          <Link href="/#archive">
+            Archive
           </Link>
-          <Link href={`/${locale}/treasure-map`} className="text-acid">
-            {locale === "uz" ? "Xazina xaritasi" : locale === "ru" ? "Карта сокровищ" : "Treasure Map"}
+          <Link href="/treasure-map" className="text-acid">
+            Treasure Map
           </Link>
-          <Link href={`/${locale}#about`}>
-            {locale === "uz" ? "Loyiha haqida" : locale === "ru" ? "О проекте" : "About"}
+          <Link href="/#about">
+            About
           </Link>
         </nav>
-        <LanguageSwitcher locale={locale} />
       </header>
 
       {/* Page Content */}
@@ -87,7 +80,7 @@ export default function TreasureMapPage() {
         {/* Breadcrumb / Back button */}
         <div className="pt-8 pb-3">
           <Link
-            href={`/${locale}`}
+            href="/"
             className="text-link inline-flex items-center gap-2 text-xs font-mono text-muted hover:text-acid"
           >
             <ArrowLeft size={13} />

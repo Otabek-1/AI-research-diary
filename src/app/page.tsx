@@ -1,3 +1,3 @@
-import { redirect } from "next/navigation";
+import LocalizedHome from "@/components/LocalizedHome";
 
-export default function RootPage() { redirect("/en"); }
+export default function RootPage() { return <LocalizedHome />; }

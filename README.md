@@ -37,7 +37,7 @@ Open `http://localhost:3000`. Production validation is `npm run lint` and `npm r
    ```
 
    `GITHUB_TOKEN` needs repository contents read/write permission. It is server-only and is never exposed to the browser.
-5. Deploy, then verify `/en`, `/uz`, `/ru`, and `/private-editor`.
+5. Deploy, then verify `/`, `/research/<slug>`, `/treasure-map`, and `/private-editor`.
 6. Add the production domain in **Settings → Domains** if using a custom domain.
 
 The build generates `src/lib/generated-content.ts` from the JSON files mirrored into the repository after a Google Drive save.
@@ -60,15 +60,15 @@ There are no required `NEXT_PUBLIC_*` variables.
 
 ## Deploy on Netlify
 
-Connect the repository to Netlify and use the default Node build environment. `netlify.toml` runs `npm run build` and enables the official Next.js adapter, so direct requests to locale research URLs such as `/uz/research/neural-networks` are handled by Next instead of falling through to a static 404. Legacy `/article/<slug>` and `/<locale>/article/<slug>` links redirect to the canonical research URL.
+Connect the repository to Netlify and use the default Node build environment. `netlify.toml` runs `npm run build` and enables the official Next.js adapter. Research pages use `/research/<slug>` and legacy `/article/<slug>` links redirect to that canonical URL. Browser translation can be used when another language is needed.
 
 ## Content workflow
 
 - Google Drive is the editor's source of truth; files are mirrored under `content/` only so the public Next.js build can render them.
 - `content/tree.json` is the hierarchy source of truth.
-- The tree is language-independent: section IDs, document IDs, nesting, and ordering live only in `content/tree.json`; locale files provide translated document text and labels, not separate structures.
+- The tree is language-independent: section IDs, document IDs, nesting, and ordering live only in `content/tree.json`; published document text is stored in the English content collection.
 - The public site statically renders published JSON only.
-- `/private-editor` imports an existing document, validates required identity fields, and exports JSON or a ZIP preserving the `content/locales/<locale>/<slug>.json` path.
+- `/private-editor` imports an existing document, validates required identity fields, and exports JSON or a ZIP preserving the `content/locales/en/<slug>.json` path.
 - The editor reads documents from the protected Google Drive storage API and creates, updates, and deletes Drive files through the protected publish API; GitHub is updated only after Drive succeeds.
 
 ## Editor protection

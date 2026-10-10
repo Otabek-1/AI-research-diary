@@ -1,5 +1,4 @@
 import defaultRoadmapData from "../../content/roadmap.json";
-import { Locale } from "@/lib/content";
 
 export type DestinationStatus = "completed" | "current" | "upcoming";
 
@@ -46,7 +45,7 @@ export const defaultRoadmap = defaultRoadmapData as RoadmapData;
 
 export function getRoadmapText(
   value: string | Record<string, string> | undefined,
-  locale: Locale,
+  locale: string,
   fallback = "",
 ): string {
   if (!value) return fallback;
@@ -54,7 +53,7 @@ export function getRoadmapText(
   return value[locale] ?? value.en ?? Object.values(value)[0] ?? fallback;
 }
 
-export function resolveTreasureLink(treasure: TreasureItem, locale: Locale): string | null {
+export function resolveTreasureLink(treasure: TreasureItem): string | null {
   if (treasure.linkUrl && treasure.linkUrl.trim()) {
     const raw = treasure.linkUrl.trim();
     if (raw.startsWith("http://") || raw.startsWith("https://")) {
@@ -63,10 +62,10 @@ export function resolveTreasureLink(treasure: TreasureItem, locale: Locale): str
     if (raw.startsWith("/")) {
       return raw;
     }
-    return `/${locale}/research/${raw}`;
+    return `/research/${raw}`;
   }
   if (treasure.docSlug && treasure.docSlug.trim()) {
-    return `/${locale}/research/${treasure.docSlug.trim()}`;
+    return `/research/${treasure.docSlug.trim()}`;
   }
   return null;
 }

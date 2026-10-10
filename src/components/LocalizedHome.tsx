@@ -9,12 +9,10 @@ import {
   getDocuments,
   getTree,
   getUi,
-  Locale,
   sectionLabel,
   Tree,
   TreeNode,
 } from "@/lib/content";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { TreasureHeroSection } from "@/components/TreasureHeroSection";
 import {
   RoadmapData,
@@ -22,8 +20,9 @@ import {
   parseRoadmapFromFiles,
 } from "@/lib/roadmap";
 
-export default function LocalizedHome({ locale }: { locale: Locale }) {
-  const ui = getUi(locale).ui;
+export default function LocalizedHome() {
+  const locale = "en" as const;
+  const ui = getUi().ui;
   const [driveDocuments, setDriveDocuments] = useState<Document[] | null>(null);
   const [driveTree, setDriveTree] = useState<Tree | null>(null);
   const [driveLabels, setDriveLabels] = useState<Record<string, string> | null>(null);
@@ -47,12 +46,12 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
         const localized = new Map<string, Document>();
         const fallback = new Map<string, Document>();
         for (const file of files) {
-          const match = file.path.match(/^content\/locales\/(en|uz|ru)\/.+\.json$/);
+          const match = file.path.match(/^content\/locales\/en\/.+\.json$/);
           if (!match) continue;
           const document = decode(file.content) as Document;
           if (document.status !== "published" || !documentIds.has(document.id)) continue;
-          if (match[1] === locale) localized.set(document.id, document);
-          if (match[1] === "en") fallback.set(document.id, document);
+          localized.set(document.id, document);
+          fallback.set(document.id, document);
         }
         const documents = [...documentIds]
           .map((id) => localized.get(id) ?? fallback.get(id))
@@ -63,8 +62,8 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
         setDriveDocuments(documents);
         if (driveTree) setDriveTree(driveTree);
         if (sectionsFile) {
-          const sections = (decode(sectionsFile.content) as { sections?: Record<string, Partial<Record<Locale, string>>> }).sections ?? {};
-          setDriveLabels(Object.fromEntries(Object.entries(sections).map(([id, names]) => [id, names[locale] ?? names.en ?? id])));
+          const sections = (decode(sectionsFile.content) as { sections?: Record<string, { en?: string }> }).sections ?? {};
+          setDriveLabels(Object.fromEntries(Object.entries(sections).map(([id, names]) => [id, names.en ?? id])));
         }
       } catch {
         if (!cancelled) setDriveDocuments([]);
@@ -72,11 +71,11 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
     }
     void loadDriveContent();
     return () => { cancelled = true; };
-  }, [locale]);
-  const documents = driveDocuments ?? getDocuments(locale);
+  }, []);
+  const documents = driveDocuments ?? getDocuments();
   const knowledgeTree = driveTree
     ? { ...driveTree, roots: localizeDriveTree(driveTree.roots, driveLabels ?? {}) }
-    : getTree(locale);
+    : getTree();
   const activeRoadmap = driveRoadmap ?? defaultRoadmap;
   const firstDocument = documents[0];
   const [query, setQuery] = useState("");
@@ -93,18 +92,17 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
     <div className="site-wrapper">
       <div className="site-shell">
         <header className="topbar">
-          <Link className="wordmark" href={`/${locale}`}>
+          <Link className="wordmark" href="/">
             FIELD / NOTES<span>01</span>
           </Link>
           <nav className="public-nav" aria-label="Primary navigation">
-            <Link href={`/${locale}/treasure-map`}>
+            <Link href="/treasure-map">
               {ui.treasureMap ?? "Treasure Map"}
             </Link>
             <a href="#archive">{ui.archive}</a>
             <a href="#map">{ui.map}</a>
             <a href="#about">{ui.about}</a>
           </nav>
-          <LanguageSwitcher locale={locale} />
           <button
             className="icon-button"
             aria-label={ui.search}
@@ -193,8 +191,8 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
           <div className="search-results">
             {results.length ? (
               results.map((document) => (
-                <Link key={document.id} href={`/${locale}/research/${document.slug}`} className="search-result">
-                  <span>{driveLabels?.[document.section] ?? sectionLabel(document.section, locale)}</span>
+                <Link key={document.id} href={`/research/${document.slug}`} className="search-result">
+                  <span>{driveLabels?.[document.section] ?? sectionLabel(document.section)}</span>
                   <strong>{document.title}</strong>
                   <p>{document.description}</p>
                 </Link>
@@ -208,10 +206,10 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
           <div className="document-list">
             {documents.length ? (
               documents.map((document, index) => (
-                <Link href={`/${locale}/research/${document.slug}`} className="document-row" key={document.id}>
+                <Link href={`/research/${document.slug}`} className="document-row" key={document.id}>
                   <span className="doc-index">0{index + 1}</span>
                   <div className="doc-main">
-                    <span className="doc-section">{driveLabels?.[document.section] ?? sectionLabel(document.section, locale)}</span>
+                    <span className="doc-section">{driveLabels?.[document.section] ?? sectionLabel(document.section)}</span>
                     <h3>{document.title}</h3>
                     <p>{document.description}</p>
                   </div>
@@ -235,7 +233,7 @@ export default function LocalizedHome({ locale }: { locale: Locale }) {
             <h2>{ui.where}</h2>
           </div>
           {firstDocument && (
-            <Link className="text-link" href={`/${locale}/research/${firstDocument.slug}`}>
+            <Link className="text-link" href={`/research/${firstDocument.slug}`}>
               {ui.openThread} <ArrowUpRight size={15} />
             </Link>
           )}
@@ -284,14 +282,14 @@ function TreeDocuments({
 }: {
   node: TreeNode;
   documents: ReturnType<typeof getDocuments>;
-  locale: Locale;
+  locale: string;
 }) {
   return (
     <>
       {node.documentIds?.map((id) => {
         const document = documents.find((item) => item.id === id);
         return document ? (
-          <Link href={`/${locale}/research/${document.slug}`} key={id} className="tree-document">
+          <Link href={`/research/${document.slug}`} key={id} className="tree-document">
             {document.title} <ArrowUpRight size={13} />
           </Link>
         ) : null;

@@ -3,7 +3,7 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const locales = ["en", "uz", "ru"];
+const locales = ["en"];
 const imports = [];
 const collections = [];
 
