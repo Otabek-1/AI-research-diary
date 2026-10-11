@@ -319,6 +319,21 @@
    Document page
 ================================================================== */
 .document-shell { --document-accent: var(--acid); background-position: center; background-size: cover; background-attachment: fixed; }
+.document-shell.has-background .document-aside,
+.document-shell.has-background .research-document {
+  position: relative;
+  isolation: isolate;
+}
+.document-shell.has-background .document-aside::before,
+.document-shell.has-background .research-document::before {
+  content: "";
+  position: absolute;
+  inset: -16px;
+  z-index: -1;
+  border-radius: var(--radius);
+  background: rgb(0 0 0 / 60%);
+  pointer-events: none;
+}
 .document-shell .eyebrow,
 .document-shell .related-grid svg,
 .document-shell .references svg { color: var(--document-accent); }

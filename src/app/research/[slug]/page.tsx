@@ -68,7 +68,7 @@ export default async function ResearchPage({ params }: { params: Promise<{ slug:
   };
 
   return (
-    <div className="site document-shell" style={shellStyle}>
+    <div className={`site document-shell${background ? " has-background" : ""}`} style={shellStyle}>
       <ReadingProgress />
       <header className="site-header is-document">
         <div className="site-header-inner">
