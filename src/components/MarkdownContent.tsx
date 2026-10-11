@@ -32,6 +32,16 @@ export default function MarkdownContent({ source }: { source: string }) {
           [rehypeSanitize, mathSanitizeSchema],
           rehypeKatex,
         ]}
+        components={{
+          a: ({ href, children }) => {
+            const external = typeof href === "string" && /^https?:\/\//.test(href);
+            return (
+              <a href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+                {children}
+              </a>
+            );
+          },
+        }}
       >
         {source}
       </ReactMarkdown>

@@ -1,30 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Compass,
-  CheckCircle2,
   Anchor,
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Compass,
+  Crown,
+  ExternalLink,
+  Link2,
   Lock,
   Plus,
   Trash2,
-  X,
-  ExternalLink,
-  Crown,
-  ChevronDown,
-  ChevronUp,
   Upload,
-  Link2,
+  X,
 } from "lucide-react";
 import {
+  DestinationStatus,
   RoadmapData,
   RoadmapDestination,
   TreasureItem,
-  DestinationStatus,
   getRoadmapText,
   resolveTreasureLink,
 } from "@/lib/roadmap";
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+const statusOptions: { value: DestinationStatus; label: string; hint: string; icon: typeof Lock }[] = [
+  { value: "completed", label: "Done", hint: "Done: xazina olib bo'lingan", icon: CheckCircle2 },
+  { value: "current", label: "Kema shu yerda", hint: "Current: kema shu manzilda turibdi", icon: Anchor },
+  { value: "upcoming", label: "Hali kelmadim", hint: "Upcoming: hali kelinmagan / sirli tuman", icon: Lock },
+];
 
 export function AdminRoadmapManager({
   roadmap,
@@ -42,39 +52,49 @@ export function AdminRoadmapManager({
   isSaving?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<"destinations" | "final">("destinations");
-  const [expandedId, setExpandedId] = useState<string | null>(
-    roadmap.destinations[0]?.id ?? null,
-  );
-  const [newTreasureTitle, setNewTreasureTitle] = useState("");
-  const [newTreasureLink, setNewTreasureLink] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(roadmap.destinations[0]?.id ?? null);
+  const [drafts, setDrafts] = useState<Record<string, { title: string; link: string }>>({});
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Escape closes the dialog, focus moves into it, and the page behind it stops scrolling.
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus?.();
+    };
+  }, [onClose]);
+
+  const commit = (next: Partial<RoadmapData>) => onChange({ ...roadmap, ...next, updatedAt: today() });
 
   function updateDestination(id: string, patch: Partial<RoadmapDestination>) {
-    const nextDestinations = roadmap.destinations.map((d) => {
-      if (d.id !== id) return d;
-      return { ...d, ...patch };
-    });
-    onChange({ ...roadmap, destinations: nextDestinations, updatedAt: new Date().toISOString().slice(0, 10) });
+    commit({ destinations: roadmap.destinations.map((item) => (item.id === id ? { ...item, ...patch } : item)) });
   }
 
   function setDestinationStatus(id: string, status: DestinationStatus) {
-    const nextDestinations = roadmap.destinations.map((d) => {
-      if (d.id === id) {
-        return { ...d, status };
-      }
-      // If setting this to current, other current destinations become upcoming or stay as is
-      if (status === "current" && d.status === "current") {
-        return { ...d, status: "completed" as DestinationStatus };
-      }
-      return d;
+    commit({
+      destinations: roadmap.destinations.map((item) => {
+        if (item.id === id) return { ...item, status };
+        // Only one island can hold the ship: the previous one counts as visited.
+        if (status === "current" && item.status === "current") return { ...item, status: "completed" as DestinationStatus };
+        return item;
+      }),
     });
-    onChange({ ...roadmap, destinations: nextDestinations, updatedAt: new Date().toISOString().slice(0, 10) });
   }
 
   function addDestination() {
     const nextOrder = roadmap.destinations.length + 1;
-    const newId = `destination-${Date.now()}`;
-    const newDestination: RoadmapDestination = {
-      id: newId,
+    const id = `destination-${Date.now()}`;
+    const destination: RoadmapDestination = {
+      id,
       order: nextOrder,
       title: {
         en: `Expedition Stage ${nextOrder}`,
@@ -88,598 +108,328 @@ export function AdminRoadmapManager({
       },
       status: "upcoming",
       coordinates: { x: Math.min(85, 15 * nextOrder), y: 50 },
-      treasures: [
-        {
-          id: `t-${Date.now()}-1`,
-          title: "Foundational Topic",
-          type: "gem",
-          completed: false,
-        },
-      ],
+      treasures: [{ id: `t-${Date.now()}-1`, title: "Foundational Topic", type: "gem", completed: false }],
     };
-
-    onChange({
-      ...roadmap,
-      destinations: [...roadmap.destinations, newDestination],
-      updatedAt: new Date().toISOString().slice(0, 10),
-    });
-    setExpandedId(newId);
+    commit({ destinations: [...roadmap.destinations, destination] });
+    setExpandedId(id);
   }
 
   function removeDestination(id: string) {
     if (!window.confirm("Bu manzilni o'chirib tashlamoqchimisiz?")) return;
-    const nextDestinations = roadmap.destinations
-      .filter((d) => d.id !== id)
-      .map((d, index) => ({ ...d, order: index + 1 }));
-    onChange({
-      ...roadmap,
-      destinations: nextDestinations,
-      updatedAt: new Date().toISOString().slice(0, 10),
+    commit({
+      destinations: roadmap.destinations.filter((item) => item.id !== id).map((item, index) => ({ ...item, order: index + 1 })),
     });
   }
 
-  function addTreasureToDestination(destinationId: string) {
-    if (!newTreasureTitle.trim()) return;
-    const target = roadmap.destinations.find((d) => d.id === destinationId);
-    if (!target) return;
+  function moveDestination(id: string, direction: -1 | 1) {
+    const sorted = [...roadmap.destinations].sort((a, b) => a.order - b.order);
+    const index = sorted.findIndex((item) => item.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= sorted.length) return;
+    [sorted[index], sorted[target]] = [sorted[target], sorted[index]];
+    commit({ destinations: sorted.map((item, position) => ({ ...item, order: position + 1 })) });
+  }
 
-    const newTreasure: TreasureItem = {
+  function addTreasure(destinationId: string) {
+    const draft = drafts[destinationId];
+    const title = draft?.title.trim();
+    if (!title) return;
+    const target = roadmap.destinations.find((item) => item.id === destinationId);
+    if (!target) return;
+    const link = draft.link.trim();
+    const treasure: TreasureItem = {
       id: `t-${Date.now()}`,
-      title: newTreasureTitle.trim(),
-      linkUrl: newTreasureLink.trim() || undefined,
+      title,
+      linkUrl: link || undefined,
       type: "gem",
-      completed: Boolean(newTreasureLink.trim()),
+      completed: Boolean(link),
     };
+    updateDestination(destinationId, { treasures: [...target.treasures, treasure] });
+    setDrafts((current) => ({ ...current, [destinationId]: { title: "", link: "" } }));
+  }
 
+  function updateTreasure(destinationId: string, treasureId: string, patch: Partial<TreasureItem>) {
+    const target = roadmap.destinations.find((item) => item.id === destinationId);
+    if (!target) return;
     updateDestination(destinationId, {
-      treasures: [...target.treasures, newTreasure],
+      treasures: target.treasures.map((item) => (item.id === treasureId ? { ...item, ...patch } : item)),
     });
-    setNewTreasureTitle("");
-    setNewTreasureLink("");
-  }
-
-  function updateTreasure(
-    destinationId: string,
-    treasureId: string,
-    patch: Partial<TreasureItem>,
-  ) {
-    const target = roadmap.destinations.find((d) => d.id === destinationId);
-    if (!target) return;
-
-    const nextTreasures = target.treasures.map((t) =>
-      t.id === treasureId ? { ...t, ...patch } : t,
-    );
-    updateDestination(destinationId, { treasures: nextTreasures });
-  }
-
-  function toggleTreasure(destinationId: string, treasureId: string) {
-    const target = roadmap.destinations.find((d) => d.id === destinationId);
-    if (!target) return;
-
-    const nextTreasures = target.treasures.map((t) =>
-      t.id === treasureId ? { ...t, completed: !t.completed } : t,
-    );
-    updateDestination(destinationId, { treasures: nextTreasures });
   }
 
   function removeTreasure(destinationId: string, treasureId: string) {
-    const target = roadmap.destinations.find((d) => d.id === destinationId);
+    const target = roadmap.destinations.find((item) => item.id === destinationId);
     if (!target) return;
-
-    const nextTreasures = target.treasures.filter((t) => t.id !== treasureId);
-    updateDestination(destinationId, { treasures: nextTreasures });
+    updateDestination(destinationId, { treasures: target.treasures.filter((item) => item.id !== treasureId) });
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-[#111513] border border-[#2b302e] w-full max-w-4xl max-h-[90vh] flex flex-col rounded shadow-2xl overflow-hidden my-auto">
-        {/* Modal Header */}
-        <div className="p-5 border-b border-[#2b302e] flex items-center justify-between bg-[#161c19]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded bg-[#c7ed6b18] text-[#c7ed6b] flex items-center justify-center">
-              <Compass size={20} />
-            </div>
-            <div>
-              <h2 className="font-serif text-2xl font-normal text-[#e9e7df] m-0">
-                Treasure Map Roadmap Manager
-              </h2>
-              <p className="font-mono text-xs text-[#8e918d] m-0">
-                Google Drive bilan ulangan progress boshqaruv paneli
-              </p>
-            </div>
-          </div>
+  const sorted = [...roadmap.destinations].sort((a, b) => a.order - b.order);
+  const final = roadmap.finalProject;
+  const setFinal = (patch: Partial<RoadmapData["finalProject"]>) => commit({ finalProject: { ...final, ...patch } });
+  const localized = (value: string | Record<string, string>, next: string) =>
+    typeof value === "object" ? { ...value, [locale]: next } : next;
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/treasure-map"
-              target="_blank"
-              className="px-3 py-1.5 border border-[#2b302e] hover:border-[#c7ed6b] text-[#8e918d] hover:text-[#c7ed6b] font-mono text-xs rounded inline-flex items-center gap-1.5 transition-colors"
-            >
-              <ExternalLink size={13} />
-              <span>Live Map</span>
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div
+        className="modal rm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rm-title"
+        tabIndex={-1}
+        ref={dialogRef}
+      >
+        <header className="modal-head">
+          <span className="modal-icon"><Compass size={20} /></span>
+          <div className="modal-titles">
+            <h2 id="rm-title">Treasure Map Roadmap Manager</h2>
+            <p>Google Drive bilan ulangan progress boshqaruv paneli</p>
+          </div>
+          <div className="modal-head-actions">
+            <Link href="/treasure-map" target="_blank" className="ghost-button">
+              <ExternalLink size={13} /> Live Map
             </Link>
-            <button
-              onClick={onClose}
-              className="p-1.5 text-[#8e918d] hover:text-[#e9e7df] rounded hover:bg-[#202723]"
-            >
+            <button type="button" className="icon-button" onClick={onClose} aria-label="Yopish">
               <X size={18} />
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Tab Switcher */}
-        <div className="flex border-b border-[#2b302e] bg-[#0e1210] px-5">
+        <div className="tabs" role="tablist">
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "destinations"}
+            className={activeTab === "destinations" ? "is-active" : ""}
             onClick={() => setActiveTab("destinations")}
-            className={`py-3 px-4 font-mono text-xs uppercase tracking-wider border-b-2 transition-colors ${
-              activeTab === "destinations"
-                ? "border-[#c7ed6b] text-[#c7ed6b] font-bold"
-                : "border-transparent text-[#8e918d] hover:text-[#e9e7df]"
-            }`}
           >
-            🗺️ Manzillar va Xazinalar ({roadmap.destinations.length})
+            Manzillar va xazinalar <span>{roadmap.destinations.length}</span>
           </button>
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "final"}
+            className={`${activeTab === "final" ? "is-active " : ""}is-warm`}
             onClick={() => setActiveTab("final")}
-            className={`py-3 px-4 font-mono text-xs uppercase tracking-wider border-b-2 transition-colors ${
-              activeTab === "final"
-                ? "border-[#e5a875] text-[#e5a875] font-bold"
-                : "border-transparent text-[#8e918d] hover:text-[#e9e7df]"
-            }`}
           >
-            👑 Final Project (Yakuniy Xazina)
+            <Crown size={13} /> Final Project (Yakuniy xazina)
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+        <div className="modal-body">
           {activeTab === "destinations" && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-mono text-xs text-[#8e918d]">
-                  Har bir bo&apos;lim bitta manzil. Kema qaysi manzilda turgani yoki qaysi manzil done bo&apos;lganini belgilang:
-                </span>
-                <button
-                  onClick={addDestination}
-                  className="px-3 py-1.5 bg-[#1a231e] border border-[#2b302e] hover:border-[#c7ed6b] text-[#c7ed6b] font-mono text-xs rounded inline-flex items-center gap-1.5"
-                >
+            <div className="rm-list">
+              <div className="rm-toolbar">
+                <p>Har bir bo&apos;lim bitta manzil. Kema qaysi manzilda turgani yoki qaysi manzil done bo&apos;lganini belgilang.</p>
+                <button type="button" className="ghost-button is-accent" onClick={addDestination}>
                   <Plus size={14} /> Manzil qo&apos;shish
                 </button>
               </div>
 
-              {roadmap.destinations.map((dest) => {
-                const isExpanded = expandedId === dest.id;
-                const destTitle = getRoadmapText(dest.title, locale);
-
+              {sorted.map((dest, index) => {
+                const open = expandedId === dest.id;
+                const claimed = dest.treasures.filter((item) => item.completed).length;
+                const draft = drafts[dest.id] ?? { title: "", link: "" };
+                const setDraft = (patch: Partial<{ title: string; link: string }>) =>
+                  setDrafts((current) => ({ ...current, [dest.id]: { ...draft, ...patch } }));
                 return (
-                  <div
-                    key={dest.id}
-                    className={`border rounded transition-all ${
-                      dest.status === "completed"
-                        ? "border-[#29422f] bg-[#0f1612]"
-                        : dest.status === "current"
-                        ? "border-[#4a3b25] bg-[#171510]"
-                        : "border-[#222825] bg-[#121614]"
-                    }`}
-                  >
-                    {/* Destination Row Header */}
-                    <div className="p-4 flex items-center justify-between gap-4 flex-wrap">
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-xs text-[#8e918d]">
-                          0{dest.order}.
-                        </span>
-                        <div>
-                          <h3 className="font-serif text-lg text-[#e9e7df] m-0">
-                            {destTitle}
-                          </h3>
-                          <span className="font-mono text-[10px] text-[#8e918d]">
-                            {dest.treasures.filter((t) => t.completed).length}/
-                            {dest.treasures.length} xazinalar olindi
-                          </span>
-                        </div>
+                  <section key={dest.id} className={`rm-item is-${dest.status}`}>
+                    <div className="rm-item-head">
+                      <span className="rm-order">{String(dest.order).padStart(2, "0")}</span>
+                      <div className="rm-item-title">
+                        <h3>{getRoadmapText(dest.title, locale)}</h3>
+                        <span>{claimed}/{dest.treasures.length} xazinalar olindi</span>
                       </div>
-
-                      {/* Status Badges / Selectors */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setDestinationStatus(dest.id, "completed")}
-                          className={`px-2.5 py-1 rounded font-mono text-xs inline-flex items-center gap-1.5 border transition-all ${
-                            dest.status === "completed"
-                              ? "bg-[#c7ed6b22] border-[#c7ed6b] text-[#c7ed6b] font-bold"
-                              : "border-[#2b302e] text-[#8e918d] hover:text-[#e9e7df]"
-                          }`}
-                          title="Done: Xazina olib bo'lingan"
-                        >
-                          <CheckCircle2 size={13} />
-                          <span>Done</span>
+                      <div className="segmented" role="group" aria-label="Manzil holati">
+                        {statusOptions.map((option) => (
+                          <button
+                            type="button"
+                            key={option.value}
+                            title={option.hint}
+                            aria-pressed={dest.status === option.value}
+                            className={`seg-${option.value}${dest.status === option.value ? " is-active" : ""}`}
+                            onClick={() => setDestinationStatus(dest.id, option.value)}
+                          >
+                            <option.icon size={13} /> <span>{option.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="rm-item-tools">
+                        <button type="button" className="icon-button" aria-label="Yuqoriga" disabled={index === 0} onClick={() => moveDestination(dest.id, -1)}>
+                          <ArrowUp size={14} />
                         </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setDestinationStatus(dest.id, "current")}
-                          className={`px-2.5 py-1 rounded font-mono text-xs inline-flex items-center gap-1.5 border transition-all ${
-                            dest.status === "current"
-                              ? "bg-[#e5a87522] border-[#e5a875] text-[#e5a875] font-bold"
-                              : "border-[#2b302e] text-[#8e918d] hover:text-[#e9e7df]"
-                          }`}
-                          title="Current: Bizning kema shu manzilda turibdi"
-                        >
-                          <Anchor size={13} />
-                          <span>Kema Shu Yerda</span>
+                        <button type="button" className="icon-button" aria-label="Pastga" disabled={index === sorted.length - 1} onClick={() => moveDestination(dest.id, 1)}>
+                          <ArrowDown size={14} />
                         </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setDestinationStatus(dest.id, "upcoming")}
-                          className={`px-2.5 py-1 rounded font-mono text-xs inline-flex items-center gap-1.5 border transition-all ${
-                            dest.status === "upcoming"
-                              ? "bg-[#8e918d22] border-[#8e918d] text-[#e9e7df] font-bold"
-                              : "border-[#2b302e] text-[#8e918d] hover:text-[#e9e7df]"
-                          }`}
-                          title="Upcoming: Hali kelinmagan / Sirli tuman"
-                        >
-                          <Lock size={13} />
-                          <span>Hali Kelmadim</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(isExpanded ? null : dest.id)}
-                          className="p-1.5 text-[#8e918d] hover:text-[#e9e7df] ml-1"
-                        >
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        <button type="button" className="icon-button" aria-expanded={open} aria-label={open ? "Yopish" : "Ochish"} onClick={() => setExpandedId(open ? null : dest.id)}>
+                          {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </button>
                       </div>
                     </div>
 
-                    {/* Destination Expanded Details */}
-                    {isExpanded && (
-                      <div className="p-4 border-t border-[#222825] bg-[#0c0f0d] space-y-4">
-                        {/* Title & Description inputs */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block font-mono text-[10px] uppercase text-[#8e918d] mb-1">
-                              Manzil nomi ({locale})
-                            </label>
+                    {open && (
+                      <div className="rm-item-body">
+                        <div className="form-grid">
+                          <label className="field">
+                            <span>Manzil nomi ({locale})</span>
                             <input
                               type="text"
                               value={getRoadmapText(dest.title, locale)}
-                              onChange={(e) => {
-                                const newTitle =
-                                  typeof dest.title === "object"
-                                    ? { ...dest.title, [locale]: e.target.value }
-                                    : e.target.value;
-                                updateDestination(dest.id, { title: newTitle });
-                              }}
-                              className="w-full bg-[#161c19] border border-[#2b302e] text-[#e9e7df] p-2 text-sm rounded outline-none focus:border-[#c7ed6b]"
+                              onChange={(event) => updateDestination(dest.id, { title: localized(dest.title, event.target.value) })}
                             />
-                          </div>
-
-                          <div>
-                            <label className="block font-mono text-[10px] uppercase text-[#8e918d] mb-1">
-                              Tavsif ({locale})
-                            </label>
+                          </label>
+                          <label className="field">
+                            <span>Tavsif ({locale})</span>
                             <input
                               type="text"
                               value={getRoadmapText(dest.description, locale)}
-                              onChange={(e) => {
-                                const newDesc =
-                                  typeof dest.description === "object"
-                                    ? { ...dest.description, [locale]: e.target.value }
-                                    : e.target.value;
-                                updateDestination(dest.id, { description: newDesc });
-                              }}
-                              className="w-full bg-[#161c19] border border-[#2b302e] text-[#e9e7df] p-2 text-sm rounded outline-none focus:border-[#c7ed6b]"
+                              onChange={(event) => updateDestination(dest.id, { description: localized(dest.description, event.target.value) })}
                             />
-                          </div>
+                          </label>
                         </div>
 
-                        {/* Treasures List (Ichidagi mavzular) */}
-                        <div>
-                          <label className="block font-mono text-[10px] uppercase text-[#c7ed6b] mb-2">
-                            💎 Manzilda topiladigan xazinalar (mavzular):
-                          </label>
-
-                          <div className="space-y-2 mb-3">
-                            {dest.treasures.map((treasure) => (
-                              <div
-                                key={treasure.id}
-                                className={`flex flex-col gap-2 p-2.5 rounded border text-sm transition-all ${
-                                  treasure.completed
-                                    ? "bg-[#142017] border-[#29422f]"
-                                    : "bg-[#141816] border-[#242c28]"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-2 flex-1">
-                                    <input
-                                      type="checkbox"
-                                      checked={treasure.completed}
-                                      onChange={() => toggleTreasure(dest.id, treasure.id)}
-                                      className="accent-[#c7ed6b] cursor-pointer w-4 h-4"
-                                      id={`t-chk-${treasure.id}`}
-                                    />
-                                    <input
-                                      type="text"
-                                      value={treasure.title}
-                                      onChange={(e) =>
-                                        updateTreasure(dest.id, treasure.id, {
-                                          title: e.target.value,
-                                        })
-                                      }
-                                      placeholder="Mavzu nomi..."
-                                      className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-[#c7ed6b] text-sm py-0.5 ${
-                                        treasure.completed
-                                          ? "text-[#c7ed6b] font-medium"
-                                          : "text-[#e9e7df]"
-                                      }`}
-                                    />
-                                  </div>
-
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono text-[10px] text-[#8e918d] uppercase">
-                                      {treasure.completed ? "Olingan" : "Kutilmoqda"}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => removeTreasure(dest.id, treasure.id)}
-                                      className="p-1 text-[#8e918d] hover:text-red-400"
-                                      title="O'chirish"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  </div>
+                        <p className="field-label">Manzilda topiladigan xazinalar (mavzular)</p>
+                        <div className="rm-treasures">
+                          {dest.treasures.map((treasure) => {
+                            const link = resolveTreasureLink(treasure);
+                            return (
+                              <div key={treasure.id} className={`rm-treasure${treasure.completed ? " is-done" : ""}`}>
+                                <div className="rm-treasure-row">
+                                  <input
+                                    type="checkbox"
+                                    checked={treasure.completed}
+                                    aria-label={`${treasure.title} — olingan`}
+                                    onChange={() => updateTreasure(dest.id, treasure.id, { completed: !treasure.completed })}
+                                  />
+                                  <input
+                                    type="text"
+                                    className="rm-treasure-title"
+                                    value={treasure.title}
+                                    placeholder="Mavzu nomi..."
+                                    onChange={(event) => updateTreasure(dest.id, treasure.id, { title: event.target.value })}
+                                  />
+                                  <span className="rm-treasure-state">{treasure.completed ? "Olingan" : "Kutilmoqda"}</span>
+                                  <button type="button" className="icon-button is-danger" title="O'chirish" aria-label="O'chirish" onClick={() => removeTreasure(dest.id, treasure.id)}>
+                                    <Trash2 size={14} />
+                                  </button>
                                 </div>
-
-                                {/* Research Content Link Input (Paste here!) */}
-                                <div className="flex items-center gap-2 pl-6 pt-1 border-t border-[#1a221d]">
-                                  <span className="font-mono text-[11px] text-[#8e918d] flex items-center gap-1 flex-shrink-0">
-                                    <Link2 size={12} className="text-[#c7ed6b]" />
-                                    Link / Slug:
-                                  </span>
+                                <div className="rm-treasure-link">
+                                  <Link2 size={13} />
                                   <input
                                     type="text"
                                     placeholder="Masalan: neural-networks yoki /research/neural-networks"
                                     value={treasure.linkUrl ?? treasure.docSlug ?? ""}
-                                    onChange={(e) =>
-                                      updateTreasure(dest.id, treasure.id, {
-                                        linkUrl: e.target.value,
-                                      })
-                                    }
-                                    className="flex-1 bg-[#101412] border border-[#232e26] text-[#c7ed6b] px-2.5 py-1 text-xs rounded outline-none focus:border-[#c7ed6b] font-mono"
+                                    // Editing the link replaces the legacy docSlug, otherwise a cleared field would silently keep pointing at it.
+                                    onChange={(event) => updateTreasure(dest.id, treasure.id, { linkUrl: event.target.value, docSlug: undefined })}
                                   />
-                                  {(treasure.linkUrl || treasure.docSlug) && (
-                                    <a
-                                      href={resolveTreasureLink(treasure) ?? "#"}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="p-1 text-[#c7ed6b] hover:text-[#ddfa91]"
-                                      title="Havolani ochib tekshirish"
-                                    >
+                                  {link && (
+                                    <a href={link} target="_blank" rel="noreferrer" title="Havolani ochib tekshirish" aria-label="Havolani ochish">
                                       <ExternalLink size={13} />
                                     </a>
                                   )}
                                 </div>
                               </div>
-                            ))}
-                          </div>
-
-                          {/* Add Treasure inline */}
-                          <div className="flex flex-col sm:flex-row gap-2 bg-[#121815] p-2 rounded border border-[#202c24]">
-                            <input
-                              type="text"
-                              placeholder="Yangi xazina (mavzu) nomi..."
-                              value={newTreasureTitle}
-                              onChange={(e) => setNewTreasureTitle(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  addTreasureToDestination(dest.id);
-                                }
-                              }}
-                              className="flex-1 bg-[#161c19] border border-[#2b302e] text-[#e9e7df] px-3 py-1.5 text-xs rounded outline-none focus:border-[#c7ed6b]"
-                            />
-                            <input
-                              type="text"
-                              placeholder="Research link (ixtiyoriy)..."
-                              value={newTreasureLink}
-                              onChange={(e) => setNewTreasureLink(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  addTreasureToDestination(dest.id);
-                                }
-                              }}
-                              className="flex-1 bg-[#161c19] border border-[#2b302e] text-[#c7ed6b] px-3 py-1.5 text-xs rounded outline-none focus:border-[#c7ed6b] font-mono"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => addTreasureToDestination(dest.id)}
-                              className="px-4 py-1.5 bg-[#202923] border border-[#2b302e] hover:border-[#c7ed6b] text-[#c7ed6b] font-mono text-xs rounded font-bold"
-                            >
-                              + Qo&apos;shish
-                            </button>
-                          </div>
+                            );
+                          })}
                         </div>
 
-                        {/* Delete Destination button */}
-                        <div className="pt-2 border-t border-[#1e2421] flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => removeDestination(dest.id)}
-                            className="text-red-400 hover:text-red-300 font-mono text-xs inline-flex items-center gap-1.5 p-1"
-                          >
+                        <div className="rm-add">
+                          <input
+                            type="text"
+                            placeholder="Yangi xazina (mavzu) nomi..."
+                            value={draft.title}
+                            onChange={(event) => setDraft({ title: event.target.value })}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addTreasure(dest.id);
+                              }
+                            }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Research link (ixtiyoriy)..."
+                            value={draft.link}
+                            onChange={(event) => setDraft({ link: event.target.value })}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addTreasure(dest.id);
+                              }
+                            }}
+                          />
+                          <button type="button" className="ghost-button is-accent" disabled={!draft.title.trim()} onClick={() => addTreasure(dest.id)}>
+                            <Plus size={14} /> Qo&apos;shish
+                          </button>
+                        </div>
+
+                        <div className="rm-danger">
+                          <button type="button" className="text-danger" onClick={() => removeDestination(dest.id)}>
                             <Trash2 size={13} /> Bu manzilni o&apos;chirish
                           </button>
                         </div>
                       </div>
                     )}
-                  </div>
+                  </section>
                 );
               })}
+              {!sorted.length && <p className="empty-note">Hali manzillar yo&apos;q. «Manzil qo&apos;shish» tugmasini bosing.</p>}
             </div>
           )}
 
           {activeTab === "final" && (
-            <div className="space-y-4 bg-[#14120e] p-5 rounded border border-[#3f311c]">
-              <div className="flex items-center gap-3">
-                <Crown size={22} className="text-[#e5a875]" />
+            <div className="rm-final">
+              <div className="rm-final-head">
+                <Crown size={24} />
                 <div>
-                  <h3 className="font-serif text-xl text-[#e5a875] m-0">
-                    Final Project: Yakuniy Xazina
-                  </h3>
-                  <span className="font-mono text-xs text-[#8e918d]">
-                    Xaritaning oxiridagi eng oliy manzil va mukofot
-                  </span>
+                  <h3>Final Project: Yakuniy xazina</h3>
+                  <span>Xaritaning oxiridagi eng oliy manzil va mukofot</span>
                 </div>
               </div>
-
-              <div>
-                <label className="block font-mono text-[10px] uppercase text-[#8e918d] mb-1">
-                  Final Project Nomi ({locale})
-                </label>
-                <input
-                  type="text"
-                  value={getRoadmapText(roadmap.finalProject.title, locale)}
-                  onChange={(e) => {
-                    const newTitle =
-                      typeof roadmap.finalProject.title === "object"
-                        ? { ...roadmap.finalProject.title, [locale]: e.target.value }
-                        : e.target.value;
-                    onChange({
-                      ...roadmap,
-                      finalProject: { ...roadmap.finalProject, title: newTitle },
-                    });
-                  }}
-                  className="w-full bg-[#1c1813] border border-[#3f311c] text-[#e9e7df] p-2 text-sm rounded outline-none focus:border-[#e5a875]"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono text-[10px] uppercase text-[#8e918d] mb-1">
-                  Tavsif ({locale})
-                </label>
-                <textarea
-                  value={getRoadmapText(roadmap.finalProject.description, locale)}
-                  onChange={(e) => {
-                    const newDesc =
-                      typeof roadmap.finalProject.description === "object"
-                        ? { ...roadmap.finalProject.description, [locale]: e.target.value }
-                        : e.target.value;
-                    onChange({
-                      ...roadmap,
-                      finalProject: { ...roadmap.finalProject, description: newDesc },
-                    });
-                  }}
-                  rows={2}
-                  className="w-full bg-[#1c1813] border border-[#3f311c] text-[#e9e7df] p-2 text-sm rounded outline-none focus:border-[#e5a875]"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono text-[10px] uppercase text-[#8e918d] mb-1">
-                  Oliy Mukofot (Reward label)
-                </label>
-                <input
-                  type="text"
-                  value={roadmap.finalProject.reward ?? ""}
-                  onChange={(e) => {
-                    onChange({
-                      ...roadmap,
-                      finalProject: { ...roadmap.finalProject, reward: e.target.value },
-                    });
-                  }}
-                  className="w-full bg-[#1c1813] border border-[#3f311c] text-[#e9e7df] p-2 text-sm rounded outline-none focus:border-[#e5a875]"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono text-[10px] uppercase text-[#8e918d] mb-1">
-                  Final Project Holati
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onChange({
-                        ...roadmap,
-                        finalProject: { ...roadmap.finalProject, status: "upcoming" },
-                      })
-                    }
-                    className={`px-3 py-1.5 rounded font-mono text-xs border ${
-                      roadmap.finalProject.status === "upcoming"
-                        ? "bg-[#8e918d22] border-[#8e918d] text-[#e9e7df] font-bold"
-                        : "border-[#2b302e] text-[#8e918d]"
-                    }`}
-                  >
-                    Kutilmoqda (Upcoming)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onChange({
-                        ...roadmap,
-                        finalProject: { ...roadmap.finalProject, status: "current" },
-                      })
-                    }
-                    className={`px-3 py-1.5 rounded font-mono text-xs border ${
-                      roadmap.finalProject.status === "current"
-                        ? "bg-[#e5a87522] border-[#e5a875] text-[#e5a875] font-bold"
-                        : "border-[#2b302e] text-[#8e918d]"
-                    }`}
-                  >
-                    Kema Yetib Keldi (Current)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onChange({
-                        ...roadmap,
-                        finalProject: { ...roadmap.finalProject, status: "completed" },
-                      })
-                    }
-                    className={`px-3 py-1.5 rounded font-mono text-xs border ${
-                      roadmap.finalProject.status === "completed"
-                        ? "bg-[#c7ed6b22] border-[#c7ed6b] text-[#c7ed6b] font-bold"
-                        : "border-[#2b302e] text-[#8e918d]"
-                    }`}
-                  >
-                    Zabt Etildi (Done)
-                  </button>
+              <label className="field">
+                <span>Final Project nomi ({locale})</span>
+                <input type="text" value={getRoadmapText(final.title, locale)} onChange={(event) => setFinal({ title: localized(final.title, event.target.value) })} />
+              </label>
+              <label className="field">
+                <span>Tavsif ({locale})</span>
+                <textarea rows={3} value={getRoadmapText(final.description, locale)} onChange={(event) => setFinal({ description: localized(final.description, event.target.value) })} />
+              </label>
+              <label className="field">
+                <span>Oliy mukofot (reward label)</span>
+                <input type="text" value={final.reward ?? ""} onChange={(event) => setFinal({ reward: event.target.value })} />
+              </label>
+              <div className="field">
+                <span>Final Project holati</span>
+                <div className="segmented is-wide" role="group" aria-label="Final project holati">
+                  {([
+                    ["upcoming", "Kutilmoqda"],
+                    ["current", "Kema yetib keldi"],
+                    ["completed", "Zabt etildi"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      type="button"
+                      key={value}
+                      aria-pressed={final.status === value}
+                      className={`seg-${value}${final.status === value ? " is-active" : ""}`}
+                      onClick={() => setFinal({ status: value })}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="p-4 border-t border-[#2b302e] bg-[#161c19] flex items-center justify-between flex-wrap gap-3">
-          <span className="font-mono text-xs text-[#8e918d]">
-            Oxirgi yangilanish: {roadmap.updatedAt}
-          </span>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-[#2b302e] hover:border-[#8e918d] text-[#e9e7df] font-mono text-xs rounded"
-            >
-              Yopish
-            </button>
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={onSaveToDrive}
-              className="px-5 py-2 bg-[#c7ed6b] hover:bg-[#ddfa91] text-[#161a16] font-mono text-xs font-bold rounded inline-flex items-center gap-2 transition-all shadow-lg shadow-[#c7ed6b22]"
-            >
-              <Upload size={15} />
-              <span>{isSaving ? "Saqlanmoqda..." : "Google Drive'ga Saqlash"}</span>
+        <footer className="modal-foot">
+          <span>Oxirgi yangilanish: {roadmap.updatedAt}</span>
+          <div>
+            <button type="button" className="ghost-button" onClick={onClose}>Yopish</button>
+            <button type="button" className="primary-button" disabled={isSaving} onClick={() => void onSaveToDrive()}>
+              <Upload size={15} /> {isSaving ? "Saqlanmoqda..." : "Google Drive'ga saqlash"}
             </button>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );

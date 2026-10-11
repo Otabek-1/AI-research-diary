@@ -1,3 +1,6 @@
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, join, resolve, sep } from "node:path";
+
 type DriveFile = {
   path: string;
   content: string;
@@ -12,10 +15,23 @@ export type StoredDriveFile = {
 };
 
 const driveApi = "https://www.googleapis.com/drive/v3";
+const CACHE_TTL_MS = 20_000;
+let readCache: { at: number; files: StoredDriveFile[] } | null = null;
+let readInFlight: Promise<StoredDriveFile[]> | null = null;
 const uploadApi = "https://www.googleapis.com/upload/drive/v3/files";
 
+/**
+ * Local development without Google credentials: set LOCAL_CONTENT_DIR to a folder that
+ * mirrors the Drive layout (content/tree.json, content/locales/en/*.json, ...).
+ * The same read/save code paths then work against the file system.
+ */
+function localRoot() {
+  const dir = process.env.LOCAL_CONTENT_DIR?.trim();
+  return dir ? resolve(dir) : null;
+}
+
 export function isGoogleDriveConfigured() {
-  return Boolean(
+  return Boolean(localRoot()) || Boolean(
     process.env.GOOGLE_CLIENT_ID &&
       process.env.GOOGLE_CLIENT_SECRET &&
       process.env.GOOGLE_REFRESH_TOKEN &&
@@ -28,57 +44,105 @@ export async function syncFilesToGoogleDrive(files: DriveFile[], deletes: string
     return { configured: false, files: 0, deletes: 0 };
   }
 
+  const root = localRoot();
+  if (root) return syncFilesToLocalDirectory(root, files, deletes);
+
   const accessToken = await getAccessToken();
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID as string;
   let syncedFiles = 0;
   let deletedFiles = 0;
+  // A path that is uploaded in this request must never be deleted by the same request,
+  // otherwise the file that was just written would disappear again.
+  const uploaded = new Set(files.map((file) => file.path));
+  const pendingDeletes = deletes.filter((path) => !uploaded.has(path));
 
-  for (const file of files) {
-    const existing = await findFile(accessToken, folderId, file.path);
-    await uploadFile(accessToken, folderId, file, existing?.id);
-    syncedFiles += 1;
-  }
-  for (const path of deletes) {
-    const existing = await findFile(accessToken, folderId, path);
-    if (!existing) continue;
-    const response = await fetch(`${driveApi}/files/${encodeURIComponent(existing.id)}`, {
-      method: "DELETE",
-      headers: { Authorization: "Bearer " + accessToken },
-    });
-    if (!response.ok) {
-      throw new Error(`Google Drive rejected deletion of ${path}: ${await response.text()}`);
+  try {
+    for (const file of files) {
+      const existing = await findFile(accessToken, folderId, file.path);
+      await uploadFile(accessToken, folderId, file, existing?.id);
+      syncedFiles += 1;
     }
-    deletedFiles += 1;
+    for (const path of pendingDeletes) {
+      const existing = await findFile(accessToken, folderId, path);
+      if (!existing) continue;
+      const response = await fetch(`${driveApi}/files/${encodeURIComponent(existing.id)}`, {
+        method: "DELETE",
+        headers: { Authorization: "Bearer " + accessToken },
+      });
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`Google Drive rejected deletion of ${path}: ${await response.text()}`);
+      }
+      deletedFiles += 1;
+    }
+  } finally {
+    // Whatever happened, the cached listing may now be stale.
+    readCache = null;
   }
 
   return { configured: true, files: syncedFiles, deletes: deletedFiles };
 }
 
-export async function readFilesFromGoogleDrive(): Promise<StoredDriveFile[]> {
+export async function readFilesFromGoogleDrive(options: { fresh?: boolean } = {}): Promise<StoredDriveFile[]> {
   if (!isGoogleDriveConfigured()) {
     throw new Error("Google Drive storage is not configured on the server.");
   }
+  if (!options.fresh && readCache && Date.now() - readCache.at < CACHE_TTL_MS) return readCache.files;
+  if (!options.fresh && readInFlight) return readInFlight;
+
+  const task = loadAllFiles().then((files) => {
+    readCache = { at: Date.now(), files };
+    return files;
+  });
+  if (!options.fresh) {
+    readInFlight = task;
+    task.then(
+      () => { readInFlight = null; },
+      () => { readInFlight = null; },
+    );
+  }
+  return task;
+}
+
+async function loadAllFiles(): Promise<StoredDriveFile[]> {
+  const root = localRoot();
+  if (root) return readLocalDirectory(root);
   const accessToken = await getAccessToken();
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID as string;
   const query = `'${escapeQuery(folderId)}' in parents and trashed = false`;
-  const response = await fetch(
-    `${driveApi}/files?q=${encodeURIComponent(query)}&pageSize=1000&fields=files(id,name,mimeType)`,
-    { headers: { Authorization: "Bearer " + accessToken } },
-  );
-  if (!response.ok) throw new Error(`Google Drive listing failed: ${await response.text()}`);
-  const result = (await response.json()) as { files?: DriveItem[] };
-  const files: StoredDriveFile[] = [];
+  const items: DriveItem[] = [];
+  let pageToken: string | undefined;
 
-  for (const file of result.files ?? []) {
-    const contentResponse = await fetch(
-      `${driveApi}/files/${encodeURIComponent(file.id)}?alt=media`,
-      { headers: { Authorization: "Bearer " + accessToken } },
+  do {
+    const url =
+      `${driveApi}/files?q=${encodeURIComponent(query)}&pageSize=1000` +
+      `&fields=nextPageToken,files(id,name,mimeType)` +
+      (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "");
+    const response = await fetch(url, { headers: { Authorization: "Bearer " + accessToken } });
+    if (!response.ok) throw new Error(`Google Drive listing failed: ${await response.text()}`);
+    const result = (await response.json()) as { files?: DriveItem[]; nextPageToken?: string };
+    items.push(...(result.files ?? []));
+    pageToken = result.nextPageToken;
+  } while (pageToken);
+
+  // Download in small parallel batches instead of one request after another.
+  const files: StoredDriveFile[] = [];
+  const batchSize = 8;
+  for (let index = 0; index < items.length; index += batchSize) {
+    const batch = items.slice(index, index + batchSize);
+    const loaded = await Promise.all(
+      batch.map(async (file) => {
+        const contentResponse = await fetch(
+          `${driveApi}/files/${encodeURIComponent(file.id)}?alt=media`,
+          { headers: { Authorization: "Bearer " + accessToken } },
+        );
+        if (!contentResponse.ok) {
+          throw new Error(`Google Drive could not read ${file.name}: ${await contentResponse.text()}`);
+        }
+        const content = Buffer.from(await contentResponse.arrayBuffer()).toString("base64");
+        return { path: file.name, content, encoding: "base64" } as StoredDriveFile;
+      }),
     );
-    if (!contentResponse.ok) {
-      throw new Error(`Google Drive could not read ${file.name}: ${await contentResponse.text()}`);
-    }
-    const content = Buffer.from(await contentResponse.arrayBuffer()).toString("base64");
-    files.push({ path: file.name, content, encoding: "base64" });
+    files.push(...loaded);
   }
   return files;
 }
@@ -157,4 +221,48 @@ async function uploadFile(
 
 function escapeQuery(value: string) {
   return value.replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+}
+
+async function readLocalDirectory(root: string): Promise<StoredDriveFile[]> {
+  const files: StoredDriveFile[] = [];
+  async function walk(directory: string) {
+    let entries: string[] = [];
+    try {
+      entries = await readdir(directory);
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      const full = join(directory, name);
+      const info = await stat(full);
+      if (info.isDirectory()) await walk(full);
+      else {
+        const path = full.slice(root.length + 1).split(sep).join("/");
+        files.push({ path, content: (await readFile(full)).toString("base64"), encoding: "base64" });
+      }
+    }
+  }
+  await walk(root);
+  return files;
+}
+
+async function syncFilesToLocalDirectory(root: string, files: DriveFile[], deletes: string[]) {
+  const uploaded = new Set(files.map((file) => file.path));
+  const target = (path: string) => {
+    const full = resolve(root, path);
+    if (!full.startsWith(root + sep)) throw new Error(`Refusing to write outside the content directory: ${path}`);
+    return full;
+  };
+  for (const file of files) {
+    const full = target(file.path);
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, Buffer.from(file.content, file.encoding === "base64" ? "base64" : "utf8"));
+  }
+  let deleted = 0;
+  for (const path of deletes.filter((item) => !uploaded.has(item))) {
+    await rm(target(path), { force: true });
+    deleted += 1;
+  }
+  readCache = null;
+  return { configured: true, files: files.length, deletes: deleted };
 }

@@ -15,7 +15,9 @@ export function proxy(request: NextRequest) {
   const authorization = request.headers.get("authorization");
   if (authorization?.startsWith("Basic ")) {
     try {
-      const decoded = atob(authorization.slice(6));
+      // atob() yields a binary string; decode it as UTF-8 so non-ASCII passwords work.
+      const binary = atob(authorization.slice(6));
+      const decoded = new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
       const separator = decoded.indexOf(":");
       const password = separator > -1 ? decoded.slice(separator + 1) : "";
       if (separator > -1 && bcrypt.compareSync(password, passwordHash)) { attempts.delete(clientKey); return NextResponse.next(); }

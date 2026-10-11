@@ -114,8 +114,13 @@ export function parseRoadmapFromFiles(
   );
   if (!roadmapFile) return null;
   try {
-    const raw = Buffer.from(roadmapFile.content, "base64").toString("utf8");
-    return JSON.parse(raw) as RoadmapData;
+    // Works in the browser and on the server; decodes UTF-8 correctly in both.
+    const binary = atob(roadmapFile.content);
+    const raw = new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+    const parsed = JSON.parse(raw) as RoadmapData;
+    // Reject files that do not look like a roadmap instead of crashing the page later.
+    if (!parsed || !Array.isArray(parsed.destinations) || !parsed.finalProject) return null;
+    return parsed;
   } catch {
     return null;
   }

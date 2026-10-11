@@ -82,3 +82,7 @@ Turbopack keeps a record of the environment variables each compilation read insi
 The private editor includes `Save to Google Drive`. Configure both the Google Drive and GitHub variables in Netlify. The server updates or deletes Drive files first, then mirrors the same files through the GitHub Contents API so Netlify can rebuild. Neither token is exposed to browser code. ZIP export remains available as a manual fallback.
 
 The protected `/api/admin/storage` endpoint reads the current Drive content for the editor. Drive is a document store rather than a relational database, so concurrent writes should remain single-admin operations.
+
+## Local development without Google Drive
+
+Set `LOCAL_CONTENT_DIR` to a folder that mirrors the Drive layout (`content/tree.json`, `content/locales/en/*.json`, `content/roadmap.json`, ...). Reading and saving then work against that folder, so the editor can be tried without Google credentials. Leave it unset in production.

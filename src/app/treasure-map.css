@@ -1,585 +1,213 @@
-/* =========================================================================
-   TREASURE MAP & EXPEDITION ROADMAP STYLES
-   Aesthetic: Dark maritime cartography, neon acid accents, vintage exploration
-   ========================================================================= */
+/* ==================================================================
+   Treasure map: home expedition banner + full voyage page
+================================================================== */
 
-/* Hero Banner (w-full h-50vh, Full-Width Edge-to-Edge) */
-.treasure-hero-banner {
-  width: 100%;
-  height: 50vh;
-  min-height: 440px;
+/* ---------- Expedition banner (home) ---------- */
+.expedition-card {
   position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  border-bottom: 1px solid var(--line);
-  background: #0c100e;
-  margin: 0;
-}
-
-.treasure-hero-bg {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  background: radial-gradient(circle at 60% 40%, #16241b 0%, #0d1310 60%, #080a09 100%);
-}
-
-.treasure-grid-overlay {
-  position: absolute;
-  inset: 0;
-  background-image: 
-    linear-gradient(rgba(199, 237, 107, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(199, 237, 107, 0.04) 1px, transparent 1px);
-  background-size: 50px 50px;
-  opacity: 0.7;
-}
-
-.treasure-sea-waves {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 70% 30%, rgba(38, 51, 42, 0.6) 0%, transparent 60%);
-  filter: blur(12px);
-}
-
-.treasure-compass-rose {
-  position: absolute;
-  top: 35px;
-  right: 50px;
-  width: 130px;
-  height: 130px;
-  opacity: 0.35;
-  pointer-events: none;
-  animation: compassSlowSpin 140s linear infinite;
-}
-
-.compass-ring {
-  position: absolute;
-  inset: 0;
-  border: 1px dashed rgba(199, 237, 107, 0.5);
-  border-radius: 50%;
-}
-
-.compass-star {
-  position: absolute;
-  inset: 22px;
-  border: 1px solid rgba(233, 231, 223, 0.3);
-  transform: rotate(45deg);
-}
-
-.compass-dir {
-  position: absolute;
-  font: 10px "DM Mono", monospace;
-  color: var(--acid);
-}
-.dir-n { top: -2px; left: 50%; transform: translateX(-50%); }
-.dir-e { right: -2px; top: 50%; transform: translateY(-50%); }
-.dir-s { bottom: -2px; left: 50%; transform: translateX(-50%); }
-.dir-w { left: -2px; top: 50%; transform: translateY(-50%); }
-
-@keyframes compassSlowSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.treasure-map-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.85;
-}
-
-/* Curved dashed lines */
-.route-curved-done {
-  stroke-dasharray: 8 7;
-  animation: dashTravelGreen 25s linear infinite;
-}
-
-.route-curved-upcoming {
-  stroke-dasharray: 6 7;
-}
-
-@keyframes dashTravelGreen {
-  to {
-    stroke-dashoffset: -150;
-  }
-}
-
-.hero-ship-float {
-  animation: shipBob 4s ease-in-out infinite;
-  transform-origin: center bottom;
-}
-
-@keyframes shipBob {
-  0%, 100% {
-    transform: translate(-14px, -36px) rotate(-3deg);
-  }
-  50% {
-    transform: translate(-14px, -42px) rotate(3deg);
-  }
-}
-
-.sparkle-dot {
-  position: absolute;
-  width: 3px;
-  height: 3px;
-  background: var(--acid);
-  border-radius: 50%;
-  box-shadow: 0 0 8px var(--acid);
-  animation: twinkle 3s ease-in-out infinite;
-}
-.sparkle-1 { top: 28%; left: 38%; animation-delay: 0.2s; }
-.sparkle-2 { top: 48%; left: 62%; animation-delay: 1.4s; }
-.sparkle-3 { top: 18%; left: 78%; animation-delay: 2.1s; }
-
-@keyframes twinkle {
-  0%, 100% { opacity: 0.2; transform: scale(0.8); }
-  50% { opacity: 0.9; transform: scale(1.4); }
-}
-
-/* Curtain background: linear-gradient from transparent to black */
-.treasure-curtain-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(12, 16, 14, 0) 0%,
-    rgba(12, 16, 14, 0.4) 40%,
-    rgba(10, 13, 12, 0.85) 75%,
-    #0c100e 100%
-  );
-  z-index: 5;
-}
-
-/* Bottom-left Content inside full-width container */
-.treasure-hero-content-wrap {
-  position: relative;
-  z-index: 10;
-  width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 42px 38px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.treasure-hero-content {
-  position: relative;
-  max-width: 920px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-}
-
-.treasure-hero-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-
-.treasure-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--acid);
-  font: 11px "DM Mono", monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.treasure-icon-pulse {
-  animation: compassRotate 12s linear infinite;
-}
-
-@keyframes compassRotate {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.treasure-live-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: rgba(199, 237, 107, 0.09);
-  border: 1px solid rgba(199, 237, 107, 0.28);
-  color: var(--acid);
-  font: 10px "DM Mono", monospace;
-}
-
-.treasure-hero-title {
-  font: 400 clamp(32px, 3.6vw, 46px)/1.08 Newsreader, serif;
-  margin: 0 0 10px;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-}
-
-.treasure-hero-title em {
-  font-style: normal;
-  color: var(--acid);
-}
-
-.treasure-hero-desc {
-  max-width: 620px;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.6;
-  margin: 0 0 22px;
-}
-
-.treasure-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 22px;
-}
-
-.treasure-cta-button {
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  padding: 12px 20px;
-  box-shadow: 0 0 25px rgba(199, 237, 107, 0.25);
-  transition: all 0.2s ease;
-}
-
-.treasure-cta-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 35px rgba(199, 237, 107, 0.45);
-}
-
-.treasure-progress-summary {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  font: 11px "DM Mono", monospace;
-  color: var(--muted);
-}
-
-.summary-stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.summary-stat strong {
-  color: var(--ink);
-  font-weight: 500;
-}
-
-.text-acid {
-  color: var(--acid) !important;
-}
-
-.text-warm {
-  color: var(--warm) !important;
-}
-
-/* =========================================================================
-   DEDICATED TREASURE MAP VIEW (Vertical Serpentine Scrolling Canvas)
-   ========================================================================= */
-
-.treasure-page-shell {
-  max-width: 1380px;
-  margin: 0 auto;
-  padding: 0 32px 80px;
-}
-
-.treasure-header-section {
-  padding: 50px 0 35px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 30px;
-}
-
-.treasure-header-titles h1 {
-  font: 400 clamp(44px, 5.2vw, 72px)/0.98 Newsreader, serif;
-  margin: 0 0 14px;
-  letter-spacing: -0.03em;
-}
-
-.treasure-header-titles h1 em {
-  color: var(--acid);
-  font-style: normal;
-}
-
-.treasure-header-titles p {
-  color: var(--muted);
-  max-width: 600px;
-  font-size: 15px;
-  line-height: 1.6;
-  margin: 0;
-}
-
-.treasure-stats-panel {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  padding: 16px 24px;
-  border-radius: 4px;
-}
-
-.stat-box {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.stat-box-val {
-  font: 500 24px "DM Mono", monospace;
-  color: var(--acid);
-}
-
-.stat-box-lbl {
-  font: 10px "DM Mono", monospace;
-  color: var(--muted);
-  text-transform: uppercase;
-}
-
-/* Vertical Scrolling Maritime Map Canvas Container */
-.interactive-map-container {
-  margin: 40px 0;
-  position: relative;
-  background: #0b0f0c;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.6fr);
+  gap: 40px;
+  align-items: center;
+  padding: 44px;
+  border: 1px solid #f0b27a33;
+  border-radius: calc(var(--radius) + 8px);
+  background:
+    radial-gradient(700px 300px at 100% 0%, #f0b27a1c, transparent 65%),
+    radial-gradient(600px 300px at 0% 100%, #c8f16912, transparent 65%),
+    linear-gradient(180deg, var(--panel), var(--paper-2));
   overflow: hidden;
-  box-shadow: 0 10px 50px rgba(0, 0, 0, 0.55);
-  width: 100%;
+  isolation: isolate;
 }
-
-.map-cartography-bg {
-  position: relative;
-  width: 100%;
-  overflow: visible;
-  background: 
-    radial-gradient(ellipse at 50% 10%, #15241b 0%, #0b110e 50%, #070908 100%),
-    radial-gradient(ellipse at 50% 45%, #132219 0%, #0b110e 50%, #070908 100%),
-    radial-gradient(ellipse at 50% 85%, #18261c 0%, #0b110e 50%, #070908 100%);
+.expedition-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 80% 20%, #000, transparent 70%);
+  opacity: 0.5;
 }
+.expedition-copy h2 { font: 400 clamp(30px, 4vw, 50px)/1.05 var(--font-serif); letter-spacing: -0.03em; margin-bottom: 16px; text-wrap: balance; }
+.expedition-copy h2 em { font-style: italic; color: var(--warm); }
+.expedition-copy .eyebrow { color: var(--warm); }
+.expedition-text { color: var(--muted); font-size: 17px; line-height: 1.65; max-width: 520px; }
 
-.map-svg-surface {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.uncharted-mist {
-  pointer-events: none;
-  transform-origin: center;
-  animation: mistDrift 8s ease-in-out infinite;
-}
-
-@keyframes mistDrift {
-  0%, 100% {
-    opacity: 0.72;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-/* Interactive Island Node Triggers */
-.map-node-trigger {
-  cursor: pointer;
-  outline: none;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.map-node-trigger:hover,
-.map-node-trigger:focus {
-  transform: scale(1.05);
-}
-
-/* Voyager Ship Animate */
-.voyager-ship-anchor {
-  animation: shipRocking 3.5s ease-in-out infinite;
-  transform-origin: 50% 90%;
-}
-
-@keyframes shipRocking {
-  0%, 100% {
-    transform: rotate(-4deg) translateY(-3px);
-  }
-  50% {
-    transform: rotate(4deg) translateY(3px);
-  }
-}
-
-/* Island card popup / hover tag */
-.island-treasure-tag {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-/* Destination Drawer / Detail Modal */
-.destination-drawer {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  padding: 30px;
-  margin-top: 30px;
-  border-radius: 6px;
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.drawer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 20px;
-  margin-bottom: 24px;
-}
-
-.drawer-title-wrap h3 {
-  font: 400 32px Newsreader, serif;
-  margin: 6px 0;
-}
-
-.drawer-status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
-  font: 11px "DM Mono", monospace;
-  text-transform: uppercase;
-  border-radius: 999px;
-}
-
-.status-badge-done {
-  background: rgba(199, 237, 107, 0.12);
-  color: var(--acid);
-  border: 1px solid rgba(199, 237, 107, 0.3);
-}
-
-.status-badge-current {
-  background: rgba(229, 168, 117, 0.14);
-  color: var(--warm);
-  border: 1px solid rgba(229, 168, 117, 0.4);
-}
-
-.status-badge-upcoming {
-  background: rgba(142, 145, 141, 0.1);
-  color: var(--muted);
-  border: 1px solid rgba(142, 145, 141, 0.25);
-}
-
-.treasures-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  margin-top: 18px;
-}
-
-.treasure-card {
-  background: #111513;
-  border: 1px solid var(--line);
-  padding: 16px 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  transition: all 0.2s ease;
-}
-
-.treasure-card.collected {
-  border-color: rgba(199, 237, 107, 0.35);
-  background: #121815;
-}
-
-.treasure-card-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.treasure-type-icon {
-  width: 32px;
-  height: 32px;
+.route { list-style: none; display: flex; align-items: center; margin: 28px 0 22px; padding: 0; max-width: 520px; }
+.route-stop { position: relative; flex: 1; display: flex; align-items: center; }
+.route-stop:last-child { flex: none; }
+.route-stop::after { content: ""; flex: 1; height: 2px; margin: 0 6px; background: repeating-linear-gradient(90deg, var(--line-2) 0 6px, transparent 6px 11px); }
+.route-stop:last-child::after { display: none; }
+.route-stop.is-completed::after { background: var(--acid); }
+.route-dot {
   display: grid;
   place-items: center;
-  border-radius: 4px;
-  background: var(--panel);
-  color: var(--muted);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  background: var(--paper);
+  color: var(--faint);
+  flex: none;
 }
+.route-stop.is-completed .route-dot { border-color: var(--acid); color: var(--acid); background: #c8f16918; }
+.route-stop.is-current .route-dot { border-color: var(--warm); color: var(--warm); background: #f0b27a22; box-shadow: 0 0 0 6px #f0b27a1a; animation: float 3s ease-in-out infinite; }
+.route-final .route-dot { width: 32px; height: 32px; border-color: #f0b27a88; color: var(--warm); border-radius: 10px; }
+.route-final.is-completed .route-dot { background: var(--warm); color: #261a0c; border-color: var(--warm); }
 
-.treasure-card.collected .treasure-type-icon {
-  background: rgba(199, 237, 107, 0.12);
-  color: var(--acid);
-}
+.live-pill { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 24px; padding: 7px 14px; border-radius: 999px; background: #f0b27a14; border: 1px solid #f0b27a33; color: var(--warm); font: 12px var(--font-mono); }
+.live-pill strong { color: var(--ink); font-weight: 500; }
+.expedition-copy .button-primary { display: flex; width: fit-content; }
 
-.treasure-card-info h4 {
-  font: 500 14px "DM Sans", sans-serif;
-  margin: 0 0 3px;
-  color: var(--ink);
-}
+.expedition-progress { display: grid; justify-items: center; gap: 24px; position: relative; }
+.expedition-progress svg { width: 200px; height: 200px; transform: rotate(-90deg); }
+.ring-track { fill: none; stroke: var(--line-2); stroke-width: 6; }
+.ring-value { fill: none; stroke: var(--acid); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 1.2s var(--ease); filter: drop-shadow(0 0 8px #c8f16988); }
+.ring-label { position: absolute; top: 0; height: 200px; display: grid; place-content: center; text-align: center; }
+.ring-label strong { font: 400 48px/1 var(--font-serif); letter-spacing: -0.03em; }
+.ring-label span { color: var(--muted); font: 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; }
+.progress-facts { display: flex; gap: 28px; margin: 0; }
+.progress-facts div { text-align: center; }
+.progress-facts dt { color: var(--muted); font: 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
+.progress-facts dd { margin: 4px 0 0; font: 400 24px var(--font-serif); }
 
-.treasure-card-info span {
-  font: 10px "DM Mono", monospace;
-  color: var(--muted);
-  text-transform: uppercase;
-}
+/* ---------- Treasure page ---------- */
+.treasure-page { padding-top: 40px; }
+.treasure-header { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr); gap: 40px; align-items: end; margin: 32px 0 28px; }
+.treasure-header h1 { font: 400 clamp(40px, 5.6vw, 76px)/1 var(--font-serif); letter-spacing: -0.035em; margin-bottom: 18px; text-wrap: balance; }
+.treasure-header h1 em { font-style: italic; color: var(--warm); }
+.treasure-header .eyebrow { color: var(--warm); }
+.stat-panel { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); overflow: hidden; }
+.stat-box { display: grid; gap: 6px; padding: 20px 14px; text-align: center; }
+.stat-box + .stat-box { border-left: 1px solid var(--line); }
+.stat-box-val { font: 400 30px/1 var(--font-serif); color: var(--acid); }
+.stat-box-val.is-warm { color: var(--warm); }
+.stat-box-lbl { color: var(--muted); font: 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; }
 
-/* Admin Panel Roadmap Management Styles */
-.admin-roadmap-section {
-  padding: 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  margin-top: 24px;
-}
+.anchor-banner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 20px; border: 1px solid #c8f16933; border-radius: var(--radius); background: #c8f16910; }
+.anchor-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: #c8f16922; color: var(--acid); }
+.anchor-banner > div { display: grid; gap: 2px; }
+.anchor-kicker { color: var(--acid); font: 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; }
+.anchor-banner strong { font: 400 20px var(--font-serif); }
+.anchor-live { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font: 12px var(--font-mono); }
 
-.admin-destination-row {
+/* ---------- Voyage route ---------- */
+.voyage { margin-top: 48px; }
+.voyage-hint { text-align: center; color: var(--muted); font: 12px var(--font-mono); margin-bottom: 32px; }
+.voyage-route { position: relative; list-style: none; margin: 0; padding: 0; }
+.voyage-route::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: repeating-linear-gradient(180deg, var(--line-2) 0 8px, transparent 8px 16px); }
+
+.voyage-stop { position: relative; display: flex; padding-bottom: 36px; }
+.voyage-stop.side-left { justify-content: flex-start; }
+.voyage-stop.side-right { justify-content: flex-end; }
+.voyage-stop::after { content: ""; position: absolute; left: 50%; top: 24px; bottom: -24px; width: 2px; transform: translateX(-50%); background: transparent; z-index: 0; }
+.voyage-stop.is-completed::after { background: linear-gradient(180deg, var(--acid), #c8f16955); box-shadow: 0 0 12px #c8f16955; }
+
+.voyage-node {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  z-index: 2;
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 16px;
-  align-items: center;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  background: #121715;
-  margin-bottom: 10px;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  background: var(--paper);
+  color: var(--faint);
 }
+.voyage-stop.is-completed .voyage-node { border-color: var(--acid); color: var(--acid); background: #14200f; }
+.voyage-stop.is-current .voyage-node { border-color: var(--warm); color: var(--warm); background: #241a0e; box-shadow: 0 0 0 8px #f0b27a18, 0 0 30px #f0b27a44; animation: float 3.2s ease-in-out infinite; }
+.voyage-final .voyage-node { width: 56px; height: 56px; border-radius: 16px; border-color: #f0b27a88; color: var(--warm); background: #241a0e; }
+.voyage-final.is-completed .voyage-node { background: var(--warm); color: #261a0c; border-color: var(--warm); }
 
-.admin-status-select {
-  background: var(--panel);
+.voyage-card {
+  position: relative;
+  z-index: 1;
+  width: calc(50% - 52px);
   border: 1px solid var(--line);
-  color: var(--ink);
-  font: 11px "DM Mono", monospace;
-  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--panel), var(--paper-2));
+  transition: border-color 0.25s, box-shadow 0.3s;
 }
+.voyage-stop.is-open .voyage-card { border-color: #c8f16955; box-shadow: var(--shadow-lg); }
+.voyage-stop.is-current .voyage-card { border-color: #f0b27a55; }
+.voyage-final .voyage-card { border-color: #f0b27a44; background: radial-gradient(500px 200px at 50% 0%, #f0b27a14, transparent 70%), linear-gradient(180deg, var(--panel), var(--paper-2)); }
+.voyage-final { justify-content: center; padding-bottom: 0; }
+.voyage-final .voyage-card { width: min(560px, calc(100% - 0px)); margin-top: 72px; }
 
-@media (max-width: 768px) {
-  .treasure-hero-banner {
-    height: auto;
-    min-height: 480px;
-    padding-top: 60px;
-  }
-  .treasure-hero-content-wrap {
-    padding: 0 20px 28px;
-  }
-  .treasure-page-shell {
-    padding: 0 16px 60px;
-  }
-  .treasure-header-section {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .treasure-stats-panel {
-    grid-template-columns: 1fr;
-    width: 100%;
-  }
+.voyage-card-head { display: grid; gap: 10px; width: 100%; padding: 22px 24px; border: 0; background: transparent; text-align: left; border-radius: var(--radius); }
+.voyage-card-head:hover .voyage-title { color: var(--acid); }
+.voyage-card-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.voyage-order { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font: 500 12px var(--font-mono); letter-spacing: 0.08em; }
+.voyage-final .voyage-order { color: var(--warm); }
+.voyage-title { font: 400 26px/1.15 var(--font-serif); letter-spacing: -0.02em; transition: color 0.2s; }
+.voyage-desc { color: var(--muted); font-size: 15px; line-height: 1.6; margin: 0; }
+.status-badge { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); font: 10.5px var(--font-mono); letter-spacing: 0.04em; }
+.status-badge.is-completed { color: var(--acid); border-color: #c8f16955; background: #c8f1691a; }
+.status-badge.is-current { color: var(--warm); border-color: #f0b27a55; background: #f0b27a1a; }
+.meter { display: block; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.meter-fill { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--acid), var(--acid-2)); transition: width 0.8s var(--ease); }
+.voyage-card-foot { display: flex; align-items: center; justify-content: space-between; color: var(--faint); font: 12px var(--font-mono); }
+.chevron { transition: transform 0.3s var(--ease); }
+.voyage-stop.is-open .chevron { transform: rotate(180deg); }
+
+.voyage-panel { padding: 4px 24px 24px; animation: rise 0.4s var(--ease) both; }
+.treasure-grid { display: grid; gap: 10px; }
+.treasure-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #ffffff04; transition: border-color 0.2s, background 0.2s, transform 0.25s var(--ease); }
+.treasure-card.is-link:hover { border-color: var(--acid); background: #c8f1690e; transform: translateX(3px); }
+.treasure-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--raise); color: var(--muted); flex: none; }
+.treasure-card.is-collected .treasure-icon { background: #c8f1691f; color: var(--acid); }
+.treasure-info { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.treasure-info strong { font-weight: 500; font-size: 15px; }
+.treasure-info small { color: var(--faint); font: 11px var(--font-mono); }
+.treasure-card.is-collected .treasure-info small { color: var(--acid); }
+.treasure-go { color: var(--muted); flex: none; }
+.treasure-card.is-link:hover .treasure-go { color: var(--acid); }
+.treasure-done { color: var(--acid); flex: none; }
+.treasure-todo { width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); flex: none; margin-right: 4px; }
+
+.voyage-mist { position: relative; z-index: 1; display: grid; place-items: center; height: 110px; margin: -6px 0 -36px; }
+.voyage-mist span {
+  padding: 8px 22px;
+  border-radius: 999px;
+  color: var(--muted);
+  font: 11px var(--font-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: radial-gradient(ellipse, #d8ded41f, transparent 72%);
+  backdrop-filter: blur(6px);
+}
+.reward { display: flex; gap: 14px; align-items: flex-start; margin-top: 16px; padding: 16px; border-radius: var(--radius-sm); border: 1px solid #f0b27a33; background: #f0b27a10; color: var(--warm); }
+.reward span { color: var(--warm); font: 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; }
+.reward p { margin: 4px 0 0; color: var(--ink); font-size: 15px; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .expedition-card { grid-template-columns: 1fr; padding: 28px; gap: 28px; }
+  .expedition-progress { grid-auto-flow: column; justify-content: start; align-items: center; gap: 24px; }
+  .expedition-progress svg { width: 120px; height: 120px; }
+  .ring-label { height: 120px; width: 120px; }
+  .ring-label strong { font-size: 30px; }
+  .progress-facts { flex-direction: column; gap: 10px; }
+  .progress-facts div { text-align: left; }
+  .treasure-header { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .voyage-route::before { left: 24px; transform: none; }
+  .voyage-stop, .voyage-stop.side-left, .voyage-stop.side-right { justify-content: flex-end; padding-left: 0; }
+  .voyage-stop::after { left: 24px; transform: none; }
+  .voyage-node { left: 0; transform: none; width: 48px; height: 48px; }
+  .voyage-card { width: calc(100% - 64px); }
+  .voyage-final { justify-content: flex-end; }
+  .voyage-final .voyage-card { width: calc(100% - 64px); margin-top: 0; }
+  .voyage-final .voyage-node { width: 48px; height: 48px; border-radius: 14px; }
+  .voyage-mist { justify-items: start; height: 80px; padding-left: 64px; }
+  .voyage-title { font-size: 22px; }
+  .anchor-live { margin-left: 0; }
+  .stat-panel { grid-template-columns: 1fr 1fr 1fr; }
 }

@@ -45,6 +45,24 @@
     "destinationLocked": "Veiled in uncharted mist",
     "treasures": "Treasures",
     "destinations": "Destinations",
-    "progress": "Expedition Progress"
+    "progress": "Expedition Progress",
+    "sections": "Knowledge sections",
+    "treasuresFound": "Treasures collected",
+    "allSections": "All",
+    "resultsFor": "results",
+    "loadError": "The archive could not be loaded right now.",
+    "retry": "Try again",
+    "emptyArchive": "Nothing has been published yet.",
+    "previous": "Previous note",
+    "next": "Next note",
+    "readNote": "Read note",
+    "skip": "Skip to content",
+    "menu": "Menu",
+    "noTree": "The knowledge tree will appear here once sections are published.",
+    "heroEyebrow": "Personal research laboratory",
+    "heroTitleA": "A living map of things",
+    "heroTitleB": "worth understanding.",
+    "heroText": "Notes on artificial intelligence, mathematics, and the strange distance between an idea and its implementation.",
+    "published_on": "Published"
   }
 }

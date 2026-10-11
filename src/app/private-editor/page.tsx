@@ -25,8 +25,13 @@ import {
   Upload,
   X,
   Compass,
+  BookOpen,
+  Check,
+  CircleAlert,
+  Loader2,
+  PanelLeft,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ContentBlock,
   Document,
@@ -57,7 +62,6 @@ type EditableBlock =
   | { type: "divider"; text: string }
   | ImageBlock;
 const today = new Date().toISOString().slice(0, 10);
-const visibleStatuses: Document["status"][] = ["published"];
 type PublishFile = { path: string; content: string; encoding: "utf8" | "base64" };
 const starter: Document = {
   schemaVersion: 1,
@@ -94,6 +98,11 @@ export default function PrivateEditor() {
   const [deletedPaths, setDeletedPaths] = useState<string[]>([]);
   const [publishedRevision, setPublishedRevision] = useState(0);
   const [message, setMessage] = useState("Saved locally");
+  const [dirty, setDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [panel, setPanel] = useState<"library" | "inspector" | null>(null);
+  const markDirty = useCallback(() => setDirty(true), []);
+  const selectedRef = useRef(starter.id);
   const [treeFilter, setTreeFilter] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
@@ -105,6 +114,7 @@ export default function PrivateEditor() {
   const [activeBlock, setActiveBlock] = useState<number | null>(null);
   const [leftWidth, setLeftWidth] = useState(255);
   const [rightWidth, setRightWidth] = useState(250);
+  useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
   const headings = document.content.filter((block) => block.type === "heading");
   const titleDraft = titleDrafts[locale];
   const library = useMemo(() => {
@@ -123,10 +133,6 @@ export default function PrivateEditor() {
     return [...byId.values()];
   }, [documents, imported, draftTouched]);
   const visibleTree = useMemo(() => localizedTree(tree, sectionLabels), [tree, sectionLabels]);
-  const visibleDocuments = useMemo(
-    () => publishedLibrary(library, visibleTree),
-    [library, visibleTree],
-  );
   void publishedRevision;
 
   useEffect(() => {
@@ -151,6 +157,8 @@ export default function PrivateEditor() {
     // Only re-open a document when the document or language changes.
   }, [locale, selectedId]);
   useEffect(() => {
+    // Load the Drive state once. Re-fetching on every selection used to replace the
+    // document being edited with the (older) Drive copy and wipe unsaved work.
     let cancelled = false;
     async function loadDriveContent() {
       try {
@@ -163,29 +171,37 @@ export default function PrivateEditor() {
           JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(file.content), (char) => char.charCodeAt(0))));
         const driveDocuments = (result.files ?? [])
           .filter((file) => file.path.startsWith("content/locales/") && file.path.endsWith(".json"))
-          .map((file) => decoded(file) as Document);
+          .flatMap((file) => { try { return [decoded(file) as Document]; } catch { return []; } });
         const treeFile = result.files?.find((file) => file.path === "content/tree.json");
         const sectionsFile = result.files?.find((file) => file.path === "content/sections.json");
         if (cancelled) return;
+        // Unsaved local work wins over Drive; only untouched state is refreshed.
+        const hasLocalQueue = window.localStorage.getItem("field-notes-pending-files") !== null
+          && window.localStorage.getItem("field-notes-pending-files") !== "[]";
         if (driveDocuments.length) {
           setDocuments(driveDocuments);
-          const current = driveDocuments.find((item) => item.id === selectedId);
-          if (current) setDocument(current);
+          const current = driveDocuments.find((item) => item.id === selectedRef.current);
+          const hasDraft = window.localStorage.getItem(`field-notes-draft-${locale}-${selectedRef.current}`) !== null
+            && selectedRef.current !== starter.id;
+          if (current && !hasDraft) setDocument(current);
         }
-        if (treeFile) setTree(decoded(treeFile) as Tree);
-        if (sectionsFile) {
-          const data = decoded(sectionsFile) as { sections?: Record<string, Partial<Record<Locale, string>>> };
-          setSectionLabels(Object.fromEntries(Object.entries(data.sections ?? {}).map(([id, names]) => [id, names.en ?? id])));
+        if (!hasLocalQueue) {
+          if (treeFile) setTree(decoded(treeFile) as Tree);
+          if (sectionsFile) {
+            const data = decoded(sectionsFile) as { sections?: Record<string, Partial<Record<Locale, string>>> };
+            setSectionLabels(Object.fromEntries(Object.entries(data.sections ?? {}).map(([id, names]) => [id, names.en ?? id])));
+          }
+          const driveRoadmap = parseRoadmapFromFiles(result.files ?? []);
+          if (driveRoadmap) setRoadmap(driveRoadmap);
         }
-        const driveRoadmap = parseRoadmapFromFiles(result.files ?? []);
-        if (driveRoadmap) setRoadmap(driveRoadmap);
+        setMessage("Connected to Google Drive");
       } catch (error) {
         if (!cancelled) setMessage(error instanceof Error ? error.message : "Google Drive content could not be loaded.");
       }
     }
     void loadDriveContent();
     return () => { cancelled = true; };
-  }, [selectedId]);
+  }, []);
   useEffect(() => {
     window.localStorage.setItem(
       `field-notes-draft-${locale}-${selectedId}`,
@@ -228,6 +244,7 @@ export default function PrivateEditor() {
   function openDocument(id: string) {
     const next = documents.find((item) => item.id === id) ?? readLocalDraft(locale, id);
     if (next) {
+      setPanel(null);
       setSelectedId(id);
       setDocument(next);
       setDocuments((current) =>
@@ -236,6 +253,7 @@ export default function PrivateEditor() {
     }
   }
   function updateDocument(patch: Partial<Document>) {
+    markDirty();
     setDocument((current) => ({ ...current, ...patch, updatedAt: today }));
     if (!patch.slug || patch.slug === document.slug) return;
     // Moving the slug moves the JSON file in the shared content store, so the old path has to go too.
@@ -246,6 +264,7 @@ export default function PrivateEditor() {
     ]);
   }
   function updatePresentation(patch: NonNullable<Document["presentation"]>) {
+    markDirty();
     setDocument((current) => ({
       ...current,
       presentation: { ...current.presentation, ...patch },
@@ -285,6 +304,7 @@ export default function PrivateEditor() {
     });
   }
   function updateBlock(index: number, patch: Partial<EditableBlock>) {
+    markDirty();
     setDocument((current) => ({
       ...current,
       content: current.content.map((block, blockIndex) =>
@@ -309,6 +329,7 @@ export default function PrivateEditor() {
                 : type === "image"
                   ? { type, src: "", alt: "", caption: "" }
                   : { type: "paragraph", text: "" };
+    markDirty();
     setDocument((current) => ({
       ...current,
       content: [...current.content, block as ContentBlock],
@@ -316,13 +337,15 @@ export default function PrivateEditor() {
     setCommandOpen(false);
   }
   function removeBlock(index: number) {
+    markDirty();
     setDocument((current) => ({
       ...current,
       content: current.content.filter((_, blockIndex) => blockIndex !== index),
     }));
   }
   function moveTreeNode(dragId: string, targetId: string) {
-    if (dragId === targetId) return;
+    if (!dragId || dragId === targetId) return;
+    markDirty();
     setTree((current) => ({
       ...current,
       roots: reorderTree(current.roots, dragId, targetId),
@@ -395,13 +418,17 @@ export default function PrivateEditor() {
     setMessage(`Renamed to “${nextTitle}”. Press Save to Google Drive to update the public page.`);
   }
   function deleteTreeNode(nodeId: string, title: string) {
-    if (!window.confirm(`Delete section “${title}” and its nested sections?`)) return;
+    if (!window.confirm(`Delete section “${title}”, its nested sections and every note inside them?`)) return;
     const deletedIds = collectDocumentIds(tree.roots, nodeId);
+    if (deletedIds.includes(selectedId)) { setSelectedId("new-research-note"); setDocument(starter); }
     const nextTree = { ...tree, roots: removeTreeNode(tree.roots, nodeId) };
     const deletedSlugs = library.filter((item) => deletedIds.includes(item.id)).map((item) => `content/locales/en/${item.slug}.json`);
-    setDeletedPaths((current) => [...new Set([...current, ...deletedSlugs, "content/sections.json", "content/tree.json"])]);
+    // Only the documents inside the section are removed. tree.json and sections.json are
+    // re-uploaded with the new structure; deleting them here used to wipe the whole tree.
+    setDeletedPaths((current) => [...new Set([...current, ...deletedSlugs])]);
     setTree(nextTree);
     uploadSoon(`Delete section “${title}”`, async () => [await fileFromText("content/tree.json", `${JSON.stringify(nextTree, null, 2)}\n`)]);
+    setDirty(true);
     setMessage(`Section “${title}” removed locally. Press Save to Google Drive to remove it from the public page.`);
   }
   function deleteDocument(documentId: string) {
@@ -417,16 +444,27 @@ export default function PrivateEditor() {
   }
   function renameHeading(id: string, currentText: string) {
     const nextText = window.prompt("Rename heading", currentText)?.trim();
+    if (nextText) markDirty();
     if (nextText) setDocument((current) => ({ ...current, content: current.content.map((block) => block.type === "heading" && block.id === id ? { ...block, text: nextText } : block) }));
   }
   function deleteHeading(id: string, text: string) {
-    if (!window.confirm(`Delete heading “${text}” and its block?`)) return;
+    if (!window.confirm(`Delete the heading “${text}”?`)) return;
+    markDirty();
     setDocument((current) => ({ ...current, content: current.content.filter((block) => block.type !== "heading" || block.id !== id) }));
   }
   function formatBlock(index: number, marker: string) {
     const block = document.content[index];
     if (!block || !("text" in block)) return;
-    updateBlock(index, { text: `${marker}${block.text}${marker}` });
+    const text = block.text;
+    if (marker === "link") {
+      const url = window.prompt("Link address", "https://")?.trim();
+      if (!url) return;
+      updateBlock(index, { text: `[${text}](${url})` });
+    } else if (text.startsWith(marker) && text.endsWith(marker) && text.length >= marker.length * 2) {
+      updateBlock(index, { text: text.slice(marker.length, text.length - marker.length) });
+    } else {
+      updateBlock(index, { text: `${marker}${text}${marker}` });
+    }
     setMessage("Formatting applied");
   }
   function uploadImage(index: number, file: File) {
@@ -526,6 +564,7 @@ export default function PrivateEditor() {
       const result = (await response.json()) as { ok?: boolean; error?: string };
       if (response.ok && result.ok) {
         setMessage("Treasure Map roadmap progress saved to Google Drive!");
+        setPendingFiles((current) => current.filter((file) => file.path !== "content/roadmap.json"));
       } else {
         setMessage(result.error || "Google Drive roadmap save failed.");
       }
@@ -536,18 +575,47 @@ export default function PrivateEditor() {
     }
   }
   async function saveToGoogleDrive() {
+    if (isSaving) return;
     const { files, errors } = collectPublishFiles();
     if (errors.length) { setMessage(errors.join(" | ")); return; }
+    setIsSaving(true);
     setMessage("Saving to Google Drive...");
-    const response = await fetch("/api/admin/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files, deletes: deletedPaths, message: `Update research structure (${locale})` }) });
-    const result = await response.json() as { ok?: boolean; error?: string; detail?: string };
-    if (response.ok && result.ok) {
-      setPendingFiles([]);
-      setDeletedPaths([]);
-      setPublishedRevision((revision) => revision + 1);
-      setMessage(`Saved to Google Drive: ${files.length} file(s).`);
-    } else setMessage(result.error || result.detail || "Google Drive save failed.");
+    try {
+      const response = await fetch("/api/admin/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files, deletes: deletedPaths, message: `Update research structure (${locale})` }) });
+      const result = await response.json().catch(() => ({})) as { ok?: boolean; error?: string; detail?: string };
+      if (response.ok && result.ok) {
+        setPendingFiles([]);
+        setDeletedPaths([]);
+        setDirty(false);
+        setPublishedRevision((revision) => revision + 1);
+        setMessage(`Saved to Google Drive: ${files.length} file(s).`);
+      } else setMessage(result.error || result.detail || "Google Drive save failed.");
+    } catch (error) {
+      setMessage(error instanceof Error ? `Save failed: ${error.message}` : "Save failed — check your connection and try again.");
+    } finally {
+      setIsSaving(false);
+    }
   }
+  const saveRef = useRef(saveToGoogleDrive);
+  useEffect(() => { saveRef.current = saveToGoogleDrive; });
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveRef.current();
+      }
+      if (event.key === "Escape") { setCommandOpen(false); setPanel(null); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const hasUnsaved = dirty || pendingFiles.length > 0 || deletedPaths.length > 0;
+  useEffect(() => {
+    if (!hasUnsaved) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasUnsaved]);
   function importFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -560,6 +628,7 @@ export default function PrivateEditor() {
         setImported((current) => [...current.filter((item) => item.id !== parsed.id), parsed]);
         setSelectedId(parsed.id);
         setDocument(parsed);
+        markDirty();
         setMessage("Document imported. Pick a section in Metadata, then Save to Google Drive.");
       } catch (error) {
         setMessage(
@@ -573,62 +642,84 @@ export default function PrivateEditor() {
   return (
     <main className="workspace-shell">
       <header className="workspace-header">
+        <button
+          type="button"
+          className="icon-button panel-toggle-button"
+          aria-label="Toggle library"
+          aria-expanded={panel === "library"}
+          onClick={() => setPanel((current) => (current === "library" ? null : "library"))}
+        >
+          <PanelLeft size={18} />
+        </button>
         <Link className="wordmark" href="/">
-          FIELD / NOTES<span>01</span>
+          <span className="wordmark-mark" aria-hidden="true" />
+          FIELD / NOTES<span className="wordmark-tag">editor</span>
         </Link>
         <div className="workspace-search">
           <Search size={15} />
           <input
-            placeholder="Search documents..."
+            placeholder="Search library..."
+            aria-label="Search library"
             value={treeFilter}
             onChange={(event) => setTreeFilter(event.target.value)}
           />
         </div>
+        <div className={`save-pill${isSaving ? " is-saving" : hasUnsaved ? " is-dirty" : " is-clean"}`} role="status">
+          {isSaving ? <Loader2 size={13} className="spin" /> : hasUnsaved ? <CircleAlert size={13} /> : <Check size={13} />}
+          <span>{isSaving ? "Saving…" : hasUnsaved ? "Unsaved changes" : "All changes saved"}</span>
+        </div>
         <div className="workspace-actions">
-          <button
-            className="workspace-button"
-            onClick={() => setShowRoadmapModal(true)}
-            title="Treasure Map Roadmap boshqaruvi"
-          >
-            <Compass size={15} /> Treasure Roadmap
-          </button>
-          <button
-            className="workspace-button"
-            onClick={() => setShowMetadata(true)}
-          >
-            <Settings2 size={15} /> Metadata
+          <button className="workspace-button" onClick={() => setShowRoadmapModal(true)} title="Treasure Map Roadmap boshqaruvi">
+            <Compass size={15} /> <span>Roadmap</span>
           </button>
           <Link
             className="workspace-button"
             href={`/research/${document.slug}`}
             target="_blank"
+            title="Opens the public page. Draft notes only appear there after they are published."
           >
-            <Sparkles size={15} /> Preview
+            <Sparkles size={15} /> <span>Preview</span>
           </Link>
+          <button className="workspace-button" onClick={() => exportFiles(true)} title="Download this note as a ZIP">
+            <Download size={15} /> <span>Export</span>
+          </button>
           <button
             className="workspace-button workspace-primary"
-            onClick={() => exportFiles(true)}
+            onClick={saveToGoogleDrive}
+            disabled={isSaving}
+            title="Save to Google Drive (Ctrl/⌘ + S)"
           >
-            <Download size={15} /> Finish & Export
-          </button>
-          <button className="workspace-button workspace-primary" onClick={saveToGoogleDrive}>
-            <Upload size={15} /> Save to Google Drive{pendingFiles.length ? ` (${pendingFiles.length})` : ""}
+            {isSaving ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
+            <span>Save{pendingFiles.length ? ` (${pendingFiles.length})` : ""}</span>
           </button>
         </div>
+        <button
+          type="button"
+          className="icon-button panel-toggle-button"
+          aria-label="Toggle inspector"
+          aria-expanded={panel === "inspector"}
+          onClick={() => setPanel((current) => (current === "inspector" ? null : "inspector"))}
+        >
+          <Settings2 size={18} />
+        </button>
       </header>
-      <div className="workspace-grid" style={{ gridTemplateColumns: `${leftWidth}px 6px minmax(480px, 1fr) 6px ${rightWidth}px` }}>
-        <aside className="workspace-sidebar left-sidebar">
+      {panel && <button type="button" className="panel-scrim" aria-label="Close panel" onClick={() => setPanel(null)} />}
+      <div className="workspace-grid" style={{ gridTemplateColumns: `${leftWidth}px 6px minmax(0, 1fr) 6px ${rightWidth}px` }}>
+        <aside className={`workspace-sidebar left-sidebar${panel === "library" ? " is-open" : ""}`}>
           <div className="workspace-sidebar-head">
             <div>
-              <span className="eyebrow">Research</span>
+              <span className="eyebrow"><BookOpen size={11} /> Research</span>
               <h2>Library</h2>
             </div>
             <button
               className="small-icon"
               aria-label="New research"
+              title="Blank note"
               onClick={() => {
                 setSelectedId("new-research-note");
                 setDocument(starter);
+                setDirty(false);
+                setPanel(null);
               }}
             >
               <FilePlus2 size={16} />
@@ -638,7 +729,8 @@ export default function PrivateEditor() {
             nodes={visibleTree.roots}
             filter={treeFilter}
             selectedId={selectedId}
-            labels={{ ...sectionLabels, ...Object.fromEntries(visibleDocuments.map((item) => [item.id, item.title])) }}
+            labels={{ ...sectionLabels, ...Object.fromEntries(library.map((item) => [item.id, item.id === document.id ? document.title : item.title])) }}
+            statuses={Object.fromEntries(library.map((item) => [item.id, item.id === document.id ? document.status : item.status]))}
             onSelect={openDocument}
             onReorder={moveTreeNode}
             onRename={renameTreeNode}
@@ -666,9 +758,9 @@ export default function PrivateEditor() {
           <div className="editor-toolbar">
             <div>
               <span className="eyebrow">
-                {locale.toUpperCase()} / Visual editor
+                Visual editor
               </span>
-              <p className="save-state">
+              <p className="save-state" role="status" aria-live="polite">
                 <Save size={13} /> {message}
               </p>
             </div>
@@ -711,7 +803,7 @@ export default function PrivateEditor() {
                 <button onClick={() => formatBlock(activeBlock, "`")}>
                   <Code2 size={14} />
                 </button>
-                <button onClick={() => formatBlock(activeBlock, "[link]( )")}>
+                <button onClick={() => formatBlock(activeBlock, "link")}>
                   <Link2 size={14} />
                 </button>
                 <button onClick={() => setActiveBlock(null)}>
@@ -736,6 +828,7 @@ export default function PrivateEditor() {
             <div className="add-block-wrap">
               <button
                 className="add-block"
+                aria-expanded={commandOpen}
                 onClick={() => setCommandOpen((open) => !open)}
               >
                 <Plus size={15} /> Add block
@@ -772,7 +865,7 @@ export default function PrivateEditor() {
             </div>
           </div>
         </section><div className="panel-resize-handle right-resize" onPointerDown={(event) => resizePanel("right", event)} role="separator" aria-label="Resize outline panel" />
-        <aside className="workspace-sidebar right-sidebar">
+        <aside className={`workspace-sidebar right-sidebar${panel === "inspector" ? " is-open" : ""}`}>
           <div className="outline-head">
             <span className="eyebrow">On this page</span>
             <PanelRight size={16} />
@@ -813,7 +906,8 @@ export default function PrivateEditor() {
                       const sectionId = event.target.value;
                       updateDocument({ section: sectionId });
                       setTree((current) => ({ ...current, roots: addDocumentToTree(current.roots, sectionId, document.id) }));
-                      setMessage(` under ${sectionLabels[sectionId] ?? titleCase(sectionId)}. Press Save to Google Drive to store it there.`);
+                      markDirty();
+                      setMessage(`Moved under ${sectionLabels[sectionId] ?? titleCase(sectionId)}. Press Save to store it in Google Drive.`);
                     }}
                   >
                     {tree.roots.map((root) => [root, ...collectTreeNodes(root.children ?? [])].map((node) => (
@@ -833,8 +927,9 @@ export default function PrivateEditor() {
                       })
                     }
                   >
+                    <option value="idea">Idea (hidden from the public page)</option>
                     <option value="draft">Draft (hidden from the public page)</option>
-                    <option value="in-progress">In progress (visible)</option>
+                    <option value="in-progress">In progress (hidden until published)</option>
                     <option value="published">Published (visible)</option>
                     <option value="archived">Archived (hidden)</option>
                   </select>
@@ -847,7 +942,7 @@ export default function PrivateEditor() {
                     placeholder="my-research-note"
                   />
                   <small className="field-hint">
-                    Used in /{locale}/research/{document.slug || "..."} and as the JSON file name.
+                    Public address: /research/{document.slug || "..."} — also the JSON file name.
                   </small>
                 </label>
                 <label>
@@ -908,7 +1003,7 @@ export default function PrivateEditor() {
                     {document.seo.description || document.description}
                   </span>
                   <small>
-                    field-notes.local/{locale}/research/{document.slug}
+                    /research/{document.slug}
                   </small>
                 </div>
               </div>
@@ -993,7 +1088,7 @@ export default function PrivateEditor() {
             <div className="related-editor">
               {document.related.map((id) => (
                 <span key={id}>
-                  {documents.find((item) => item.id === id)?.title ?? id}
+                  {library.find((item) => item.id === id)?.title ?? id}
                   <button
                     aria-label={`Remove ${id}`}
                     onClick={() =>
@@ -1008,22 +1103,21 @@ export default function PrivateEditor() {
                   </button>
                 </span>
               ))}
-              <button
+              <select
                 className="add-related"
-                onClick={() => {
-                  const candidate = documents.find(
-                    (item) =>
-                      item.id !== document.id &&
-                      !document.related.includes(item.id),
-                  );
-                  if (candidate)
-                    updateDocument({
-                      related: [...document.related, candidate.id],
-                    });
+                aria-label="Add related research"
+                value=""
+                onChange={(event) => {
+                  if (event.target.value) updateDocument({ related: [...document.related, event.target.value] });
                 }}
               >
-                + Add related research
-              </button>
+                <option value="">+ Add related research…</option>
+                {library
+                  .filter((item) => item.id !== document.id && !document.related.includes(item.id))
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>{item.title}</option>
+                  ))}
+              </select>
             </div>
           </div>
         </aside>
@@ -1031,7 +1125,7 @@ export default function PrivateEditor() {
       {showRoadmapModal && (
         <AdminRoadmapManager
           roadmap={roadmap}
-          onChange={setRoadmap}
+          onChange={(next) => { setRoadmap(next); markDirty(); }}
           onSaveToDrive={saveRoadmapToGoogleDrive}
           onClose={() => setShowRoadmapModal(false)}
           locale={locale}
@@ -1047,6 +1141,7 @@ function TreeView({
   filter,
   selectedId,
   labels,
+  statuses,
   onSelect,
   onReorder,
   onRename,
@@ -1061,6 +1156,7 @@ function TreeView({
   filter: string;
   selectedId: string;
   labels: Record<string, string>;
+  statuses?: Record<string, string>;
   onSelect: (id: string) => void;
   onReorder: (dragId: string, targetId: string) => void;
   onRename: (nodeId: string, title: string) => void;
@@ -1075,28 +1171,29 @@ function TreeView({
   return (
     <div className="tree-view">
       {nodes.map((node) => {
-        const visible =
-          !filter || node.title.toLowerCase().includes(filter.toLowerCase());
-        if (
-          !visible &&
-          !node.children?.some((child) =>
-            child.title.toLowerCase().includes(filter.toLowerCase()),
-          )
-        )
-          return null;
+        const needle = filter.trim().toLowerCase();
+        const matches = (candidate: TreeNode): boolean =>
+          candidate.title.toLowerCase().includes(needle) ||
+          (candidate.documentIds ?? []).some((id) => (labels[id] ?? id).toLowerCase().includes(needle)) ||
+          (candidate.children ?? []).some(matches);
+        if (needle && !matches(node)) return null;
         const isCollapsed = collapsed[node.id];
         return (
           <div
             key={node.id}
             className="tree-node"
-            style={{ paddingLeft: depth * 12 }}
+            style={{ paddingLeft: depth ? 12 : 0 }}
             draggable
-            onDragStart={(event) =>
-              event.dataTransfer.setData("text/plain", node.id)
-            }
+            onDragStart={(event) => {
+              // Nested nodes sit inside their parent's element: without stopPropagation the
+              // parent overwrote the dragged id, so dragging a child moved its parent instead.
+              event.stopPropagation();
+              event.dataTransfer.setData("text/plain", node.id);
+            }}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
+              event.stopPropagation();
               onReorder(event.dataTransfer.getData("text/plain"), node.id);
             }}
           >
@@ -1126,7 +1223,10 @@ function TreeView({
                   onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect(id); }}
                 >
                   <GripVertical size={12} />
-                  <span>{labels[id] ?? titleCase(id)}</span>
+                  <span className="tree-document-label">{labels[id] ?? titleCase(id)}</span>
+                  {statuses?.[id] && statuses[id] !== "published" && (
+                    <span className={`status-chip is-${statuses[id]}`}>{statuses[id]}</span>
+                  )}
                   <span className="tree-document-actions">
                     <button aria-label={`Rename ${labels[id] ?? id}`} onClick={(event) => { event.stopPropagation(); const next = window.prompt("Rename research", labels[id] ?? titleCase(id))?.trim(); if (next) onRenameDocument(id, next, node.id); }}>Edit</button>
                     <button aria-label={`Delete ${labels[id] ?? id}`} onClick={(event) => { event.stopPropagation(); onDeleteDocument(id); }}><Trash2 size={12} /></button>
@@ -1139,6 +1239,7 @@ function TreeView({
                 filter={filter}
                 selectedId={selectedId}
                 labels={labels}
+                statuses={statuses}
                 onSelect={onSelect}
                 onReorder={onReorder}
                 onRename={onRename}
@@ -1374,16 +1475,6 @@ function sectionLabelFrom(tree: Tree, labels: Record<string, string>, nodeId: st
 }
 function headersFor() {
   return getDocuments().map((item) => item.id);
-}
-function publishedLibrary(documents: Document[], tree: Tree) {
-  const visible = new Set(flattenTreeIds(tree));
-  const allowed = new Set<Document["status"]>(visibleStatuses);
-  return documents.filter((item) => visible.has(item.id) && allowed.has(item.status));
-}
-function flattenTreeIds(tree: Tree): string[] {
-  const walk = (nodes: TreeNode[]): string[] =>
-    nodes.flatMap((node) => [...(node.documentIds ?? []), ...walk(node.children ?? [])]);
-  return walk(tree.roots);
 }
 function localizedTree(tree: Tree, labels: Record<string, string>): Tree {
   const localize = (nodes: TreeNode[]): TreeNode[] =>

@@ -3,6 +3,8 @@ import { isGoogleDriveConfigured, syncFilesToGoogleDrive } from "@/lib/google-dr
 
 type PublishFile = { path: string; content: string; encoding?: "utf8" | "base64" };
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   if (!isGoogleDriveConfigured()) {
     return NextResponse.json(
@@ -12,12 +14,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as {
-      files?: PublishFile[];
-      deletes?: string[];
-    };
-    const files = body.files ?? [];
-    const deletes = [...new Set(body.deletes ?? [])];
+    let body: { files?: PublishFile[]; deletes?: string[] };
+    try {
+      body = (await request.json()) as { files?: PublishFile[]; deletes?: string[] };
+    } catch {
+      return NextResponse.json({ error: "The request body is not valid JSON." }, { status: 400 });
+    }
+    const files = Array.isArray(body.files) ? body.files : [];
+    const deletes = [...new Set(Array.isArray(body.deletes) ? body.deletes : [])];
 
     if (!files.length && !deletes.length) {
       return NextResponse.json({ error: "No files to save." }, { status: 400 });
@@ -40,7 +44,7 @@ export async function POST(request: Request) {
       ok: true,
       storage: "google-drive",
       files: files.map((file) => file.path),
-      deletes,
+      deletes: deletes.filter((path) => !files.some((file) => file.path === path)),
       drive,
     });
   } catch (error) {

@@ -81,3 +81,11 @@ function collectDocuments(modules: readonly unknown[]): Document[] {
 function isDocument(value: unknown): value is Document {
   return Boolean(value && typeof value === "object" && "id" in value && "slug" in value && "content" in value && Array.isArray((value as Document).content));
 }
+
+const dateFormatter = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+/** Formats `YYYY-MM-DD` (or ISO) strings the same way on the server and in the browser. */
+export function formatDate(value?: string) {
+  if (!value) return "";
+  const date = new Date(value.length === 10 ? `${value}T00:00:00Z` : value);
+  return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date);
+}
